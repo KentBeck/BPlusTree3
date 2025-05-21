@@ -6,7 +6,7 @@ fn create_empty_tree() {
 }
 
 #[test]
-fn empty_tree_has_len_zero() {
+fn new_tree_is_empty() {
     let tree: BPlusTree<i32, i32> = BPlusTree::new();
     assert_eq!(tree.len(), 0);
     assert!(tree.is_empty());

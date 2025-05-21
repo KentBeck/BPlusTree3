@@ -2,15 +2,34 @@
 
 use std::collections::BTreeMap;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
+struct LeafNode<K, V> {
+    entries: BTreeMap<K, V>,
+}
+
+impl<K: Ord, V> LeafNode<K, V> {
+    fn new() -> Self {
+        Self { entries: BTreeMap::new() }
+    }
+
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+}
+
+#[derive(Debug)]
 pub struct BPlusTree<K, V> {
-    map: BTreeMap<K, V>,
+    root: LeafNode<K, V>,
 }
 
 impl<K: Ord, V> BPlusTree<K, V> {
     /// Creates an empty `BPlusTree`.
     pub fn new() -> Self {
-        Self { map: BTreeMap::new() }
+        Self { root: LeafNode::new() }
     }
 
     /// Inserts a key-value pair into the tree.
@@ -30,12 +49,12 @@ impl<K: Ord, V> BPlusTree<K, V> {
 
     /// Returns the number of elements in the tree.
     pub fn len(&self) -> usize {
-        self.map.len()
+        self.root.len()
     }
 
     /// Returns `true` if the tree contains no elements.
     pub fn is_empty(&self) -> bool {
-        self.map.is_empty()
+        self.root.is_empty()
     }
 }
 
