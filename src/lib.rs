@@ -561,9 +561,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                                 let new_id = self.allocate_leaf(new_leaf_data);
 
                                 // Update linked list pointers for root leaf split
-                                if let Some(original_leaf) = self.get_leaf_mut(id) {
+                                self.with_leaf_mut(id, |original_leaf| {
                                     original_leaf.next = new_id;
-                                }
+                                });
 
                                 let new_node_ref = NodeRef::Leaf(new_id, PhantomData);
                                 let new_root = self.new_root(new_node_ref, separator_key);
@@ -596,8 +596,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             let child_result = match child_ref {
                 NodeRef::Leaf(child_id, _) => {
                     // Handle arena leaf child - need to access leaf arena
-                    if let Some(leaf) = self.get_leaf_mut(child_id) {
-                        leaf.insert(key, value)
+                    if let Some(result) = self.with_leaf_mut(child_id, |leaf| leaf.insert(key, value)) {
+                        result
                     } else {
                         return None; // Invalid child
                     }
@@ -623,9 +623,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                             // Update linked list pointers for leaf splits
                             if let NodeRef::Leaf(original_id, _) = child_ref {
                                 // Update the original leaf's next pointer to point to the new leaf
-                                if let Some(original_leaf) = self.get_leaf_mut(original_id) {
+                                self.with_leaf_mut(original_id, |original_leaf| {
                                     original_leaf.next = new_id;
-                                }
+                                });
                             }
 
                             NodeRef::Leaf(new_id, PhantomData)
@@ -693,11 +693,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         // Special handling for Leaf root
         if let NodeRef::Leaf(id, _) = &self.root {
             let id = *id;
-            if let Some(leaf) = self.get_leaf_mut(id) {
-                let removed = leaf.remove(key);
-                // No rebalancing needed for root leaf
-                return removed;
-            }
+            return self.with_leaf_mut(id, |leaf| leaf.remove(key)).flatten();
         }
 
         // Special handling for Branch root
@@ -903,32 +899,33 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         // Take the last key and child from left sibling
-        let (moved_key, moved_child) = {
-            if let Some(left_branch) = self.get_branch_mut(left_id) {
-                if let (Some(k), Some(c)) = (left_branch.keys.pop(), left_branch.children.pop()) {
-                    (k, c)
-                } else {
-                    return false;
-                }
+        let (moved_key, moved_child) = match self.with_branch_mut(left_id, |left_branch| {
+            if let (Some(k), Some(c)) = (left_branch.keys.pop(), left_branch.children.pop()) {
+                Some((k, c))
             } else {
-                return false;
+                None
             }
+        }) {
+            Some(Some(pair)) => pair,
+            _ => return false,
         };
 
         // Insert into child branch at the beginning
-        if let Some(child_branch) = self.get_branch_mut(child_id) {
+        let insert_success = self.with_branch_mut(child_id, |child_branch| {
             // The separator becomes the first key in child
             child_branch.keys.insert(0, separator_key);
             // The moved child becomes the first child
             child_branch.children.insert(0, moved_child);
-        } else {
+        }).is_some();
+
+        if !insert_success {
             return false;
         }
 
         // Update separator in parent (moved_key becomes new separator)
-        if let Some(parent) = self.get_branch_mut(parent_id) {
+        self.with_branch_mut(parent_id, |parent| {
             parent.keys[child_index - 1] = moved_key;
-        }
+        });
 
         true
     }
@@ -942,34 +939,35 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         // Take the first key and child from right sibling
-        let (moved_key, moved_child) = {
-            if let Some(right_branch) = self.get_branch_mut(right_id) {
-                if !right_branch.keys.is_empty() {
-                    let k = right_branch.keys.remove(0);
-                    let c = right_branch.children.remove(0);
-                    (k, c)
-                } else {
-                    return false;
-                }
+        let (moved_key, moved_child) = match self.with_branch_mut(right_id, |right_branch| {
+            if !right_branch.keys.is_empty() {
+                let k = right_branch.keys.remove(0);
+                let c = right_branch.children.remove(0);
+                Some((k, c))
             } else {
-                return false;
+                None
             }
+        }) {
+            Some(Some(pair)) => pair,
+            _ => return false,
         };
 
         // Append to child branch
-        if let Some(child_branch) = self.get_branch_mut(child_id) {
+        let append_success = self.with_branch_mut(child_id, |child_branch| {
             // The separator becomes the last key in child
             child_branch.keys.push(separator_key);
             // The moved child becomes the last child
             child_branch.children.push(moved_child);
-        } else {
+        }).is_some();
+
+        if !append_success {
             return false;
         }
 
         // Update separator in parent (moved_key becomes new separator)
-        if let Some(parent) = self.get_branch_mut(parent_id) {
+        self.with_branch_mut(parent_id, |parent| {
             parent.keys[child_index] = moved_key;
-        }
+        });
 
         true
     }
@@ -1171,9 +1169,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                                 // Update linked list pointers for leaf splits
                                 if let NodeRef::Leaf(original_id, _) = child_ref {
                                     // Update the original leaf's next pointer to point to the new leaf
-                                    if let Some(original_leaf) = self.get_leaf_mut(original_id) {
+                                    self.with_leaf_mut(original_id, |original_leaf| {
                                         original_leaf.next = new_id;
-                                    }
+                                    });
                                 }
 
                                 NodeRef::Leaf(new_id, PhantomData)
@@ -1586,20 +1584,15 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     fn collect_leaf_sizes(&self, node: &NodeRef<K, V>, sizes: &mut Vec<usize>) {
         match node {
             NodeRef::Leaf(id, _) => {
-                if let Some(leaf) = self.get_leaf(*id) {
-                    sizes.push(leaf.keys.len());
-                } else {
-                    sizes.push(0); // Missing leaf has 0 size
-                }
+                let size = self.with_leaf(*id, |leaf| leaf.keys.len()).unwrap_or(0);
+                sizes.push(size);
             }
             NodeRef::Branch(id, _) => {
-                if let Some(branch) = self.get_branch(*id) {
+                self.with_branch(*id, |branch| {
                     for child in &branch.children {
                         self.collect_leaf_sizes(child, sizes);
                     }
-                } else {
-                    // Missing arena branch contributes no leaf sizes
-                }
+                });
             }
         }
     }
@@ -1608,7 +1601,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         let indent = "  ".repeat(depth);
         match node {
             NodeRef::Leaf(id, _) => {
-                if let Some(leaf) = self.get_leaf(*id) {
+                self.with_leaf(*id, |leaf| {
                     println!(
                         "{}Leaf[id={}, cap={}]: {} keys",
                         indent,
@@ -1616,12 +1609,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         leaf.capacity,
                         leaf.keys.len()
                     );
-                } else {
+                }).unwrap_or_else(|| {
                     println!("{}Leaf[id={}]: <missing>", indent, id);
-                }
+                });
             }
             NodeRef::Branch(id, _) => {
-                if let Some(branch) = self.get_branch(*id) {
+                self.with_branch(*id, |branch| {
                     println!(
                         "{}Branch[id={}, cap={}]: {} keys, {} children",
                         indent,
@@ -1633,9 +1626,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     for child in &branch.children {
                         self.print_node(child, depth + 1);
                     }
-                } else {
+                }).unwrap_or_else(|| {
                     println!("{}Branch[id={}]: <missing>", indent, id);
-                }
+                });
             }
         }
     }
