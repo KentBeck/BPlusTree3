@@ -127,6 +127,8 @@ impl<K, V> SiblingInfo<K, V> {
     }
 }
 
+
+
 /// Node data that can be allocated in the arena after a split.
 pub enum SplitNodeData<K, V> {
     Leaf(LeafNode<K, V>),
@@ -371,6 +373,53 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.get_leaf_mut(from_id)
             .map(|leaf| { leaf.next = to_id; true })
             .unwrap_or(false)
+    }
+
+    /// Execute a function with a leaf node reference, returning a default value if node doesn't exist
+    fn with_leaf<T, F>(&self, id: NodeId, f: F) -> Option<T>
+    where
+        F: FnOnce(&LeafNode<K, V>) -> T,
+    {
+        self.get_leaf(id).map(f)
+    }
+
+    /// Execute a function with a mutable leaf node reference, returning a default value if node doesn't exist
+    fn with_leaf_mut<T, F>(&mut self, id: NodeId, f: F) -> Option<T>
+    where
+        F: FnOnce(&mut LeafNode<K, V>) -> T,
+    {
+        self.get_leaf_mut(id).map(f)
+    }
+
+    /// Execute a function with a branch node reference, returning a default value if node doesn't exist
+    fn with_branch<T, F>(&self, id: NodeId, f: F) -> Option<T>
+    where
+        F: FnOnce(&BranchNode<K, V>) -> T,
+    {
+        self.get_branch(id).map(f)
+    }
+
+    /// Execute a function with a mutable branch node reference, returning a default value if node doesn't exist
+    fn with_branch_mut<T, F>(&mut self, id: NodeId, f: F) -> Option<T>
+    where
+        F: FnOnce(&mut BranchNode<K, V>) -> T,
+    {
+        self.get_branch_mut(id).map(f)
+    }
+
+
+
+    /// Try to remove a key from a node, returning the removed value if successful
+    fn try_remove_from_node(&mut self, node_ref: &NodeRef<K, V>, key: &K) -> Option<V> {
+        match node_ref {
+            NodeRef::Leaf(id, _) => {
+                self.get_leaf_mut(*id).and_then(|leaf| leaf.remove(key))
+            }
+            NodeRef::Branch(_id, _) => {
+                // Branches don't directly contain values
+                None
+            }
+        }
     }
 
     /// Extract node IDs from two adjacent children (for branch operations)
@@ -673,12 +722,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
         // Remove from child
         let (removed_value, child_became_underfull) = match child_ref {
-            NodeRef::Leaf(leaf_id, _) => {
-                let removed = if let Some(leaf) = self.get_leaf_mut(leaf_id) {
-                    leaf.remove(key)
-                } else {
-                    None
-                };
+            NodeRef::Leaf(_leaf_id, _) => {
+                let removed = self.try_remove_from_node(&child_ref, key);
 
                 // Use helper to check if leaf became underfull
                 let is_underfull = self.is_node_underfull(&child_ref);
@@ -786,21 +831,23 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         // Merge into left branch
-        if let Some(left_branch) = self.get_branch_mut(left_id) {
+        let merge_success = self.with_branch_mut(left_id, |left_branch| {
             // Add separator key from parent
             left_branch.keys.push(separator_key);
             // Add all keys and children from child
             left_branch.keys.append(&mut child_keys);
             left_branch.children.append(&mut child_children);
-        } else {
+        }).is_some();
+
+        if !merge_success {
             return false;
         }
 
         // Remove child from parent
-        if let Some(parent) = self.get_branch_mut(parent_id) {
+        self.with_branch_mut(parent_id, |parent| {
             parent.children.remove(child_index);
             parent.keys.remove(child_index - 1);
-        }
+        });
 
         // Deallocate the merged child
         self.deallocate_branch(child_id);
@@ -823,21 +870,23 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         // Merge into child branch
-        if let Some(child_branch) = self.get_branch_mut(child_id) {
+        let merge_success = self.with_branch_mut(child_id, |child_branch| {
             // Add separator key from parent
             child_branch.keys.push(separator_key);
             // Add all keys and children from right
             child_branch.keys.append(&mut right_keys);
             child_branch.children.append(&mut right_children);
-        } else {
+        }).is_some();
+
+        if !merge_success {
             return false;
         }
 
         // Remove right from parent
-        if let Some(parent) = self.get_branch_mut(parent_id) {
+        self.with_branch_mut(parent_id, |parent| {
             parent.children.remove(child_index + 1);
             parent.keys.remove(child_index);
-        }
+        });
 
         // Deallocate the merged right sibling
         self.deallocate_branch(right_id);
@@ -934,30 +983,31 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         // Move last key-value from left to child
-        let (key, value) = {
-            if let Some(left_leaf) = self.get_leaf_mut(left_id) {
-                if let (Some(k), Some(v)) = (left_leaf.keys.pop(), left_leaf.values.pop()) {
-                    (k, v)
-                } else {
-                    return false;
-                }
+        let (key, value) = match self.with_leaf_mut(left_id, |left_leaf| {
+            if let (Some(k), Some(v)) = (left_leaf.keys.pop(), left_leaf.values.pop()) {
+                Some((k, v))
             } else {
-                return false;
+                None
             }
+        }) {
+            Some(Some(pair)) => pair,
+            _ => return false,
         };
 
         // Insert into child at beginning
-        if let Some(child_leaf) = self.get_leaf_mut(child_id) {
+        let insert_success = self.with_leaf_mut(child_id, |child_leaf| {
             child_leaf.keys.insert(0, key.clone());
             child_leaf.values.insert(0, value);
-        } else {
+        }).is_some();
+
+        if !insert_success {
             return false;
         }
 
         // Update separator in parent
-        if let Some(branch) = self.get_branch_mut(branch_id) {
+        self.with_branch_mut(branch_id, |branch| {
             branch.keys[child_index - 1] = key;
-        }
+        });
 
         true
     }
@@ -971,43 +1021,40 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         // Move first key-value from right to child
-        let (key, value) = {
-            if let Some(right_leaf) = self.get_leaf_mut(right_id) {
-                if !right_leaf.keys.is_empty() {
-                    (right_leaf.keys.remove(0), right_leaf.values.remove(0))
-                } else {
-                    return false;
-                }
+        let (key, value) = match self.with_leaf_mut(right_id, |right_leaf| {
+            if !right_leaf.keys.is_empty() {
+                Some((right_leaf.keys.remove(0), right_leaf.values.remove(0)))
             } else {
-                return false;
+                None
             }
+        }) {
+            Some(Some(pair)) => pair,
+            _ => return false,
         };
 
         // Append to child
-        if let Some(child_leaf) = self.get_leaf_mut(child_id) {
+        let append_success = self.with_leaf_mut(child_id, |child_leaf| {
             child_leaf.keys.push(key);
             child_leaf.values.push(value);
-        } else {
+        }).is_some();
+
+        if !append_success {
             return false;
         }
 
         // Update separator in parent
-        let new_separator = {
-            if let Some(right_leaf) = self.get_leaf(right_id) {
-                if !right_leaf.keys.is_empty() {
-                    Some(right_leaf.keys[0].clone())
-                } else {
-                    None
-                }
+        let new_separator = self.with_leaf(right_id, |right_leaf| {
+            if !right_leaf.keys.is_empty() {
+                Some(right_leaf.keys[0].clone())
             } else {
                 None
             }
-        };
+        }).unwrap_or(None);
 
         if let Some(new_sep) = new_separator {
-            if let Some(branch) = self.get_branch_mut(branch_id) {
+            self.with_branch_mut(branch_id, |branch| {
                 branch.keys[child_index] = new_sep;
-            }
+            });
         }
 
         true
@@ -1028,20 +1075,22 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         // Merge the child into the left leaf and update linked list
-        if let Some(left_leaf) = self.get_leaf_mut(left_id) {
+        let merge_success = self.with_leaf_mut(left_id, |left_leaf| {
             left_leaf.keys.append(&mut keys);
             left_leaf.values.append(&mut values);
             // Update linked list: left leaf's next should point to what child was pointing to
             left_leaf.next = child_next;
-        } else {
+        }).is_some();
+
+        if !merge_success {
             return false;
         }
 
         // Remove child from parent
-        if let Some(branch) = self.get_branch_mut(branch_id) {
+        self.with_branch_mut(branch_id, |branch| {
             branch.children.remove(child_index);
             branch.keys.remove(child_index - 1);
-        }
+        });
 
         // Deallocate the merged child
         self.deallocate_leaf(child_id);
@@ -1064,20 +1113,22 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         // Merge the right leaf into the left leaf and update linked list
-        if let Some(child_leaf) = self.get_leaf_mut(child_id) {
+        let merge_success = self.with_leaf_mut(child_id, |child_leaf| {
             child_leaf.keys.append(&mut keys);
             child_leaf.values.append(&mut values);
             // Update linked list: left leaf's next should point to what right was pointing to
             child_leaf.next = right_next;
-        } else {
+        }).is_some();
+
+        if !merge_success {
             return false;
         }
 
         // Remove right from parent
-        if let Some(branch) = self.get_branch_mut(branch_id) {
+        self.with_branch_mut(branch_id, |branch| {
             branch.children.remove(child_index + 1);
             branch.keys.remove(child_index);
-        }
+        });
 
         // Deallocate the merged right sibling
         self.deallocate_leaf(right_id);
@@ -1089,11 +1140,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     fn insert_recursive(&mut self, node: &NodeRef<K, V>, key: K, value: V) -> InsertResult<K, V> {
         match node {
             NodeRef::Leaf(id, _) => {
-                if let Some(leaf) = self.get_leaf_mut(*id) {
-                    leaf.insert(key, value)
-                } else {
-                    InsertResult::Updated(None)
-                }
+                self.with_leaf_mut(*id, |leaf| leaf.insert(key, value))
+                    .unwrap_or(InsertResult::Updated(None))
             }
             NodeRef::Branch(id, _) => {
                 let id = *id;
@@ -1222,22 +1270,16 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     fn len_recursive(&self, node: &NodeRef<K, V>) -> usize {
         match node {
             NodeRef::Leaf(id, _) => {
-                if let Some(leaf) = self.get_leaf(*id) {
-                    leaf.len()
-                } else {
-                    0 // Missing leaf has 0 elements
-                }
+                self.with_leaf(*id, |leaf| leaf.len()).unwrap_or(0)
             }
             NodeRef::Branch(id, _) => {
-                if let Some(branch) = self.get_branch(*id) {
+                self.with_branch(*id, |branch| {
                     branch
                         .children
                         .iter()
                         .map(|child| self.len_recursive(child))
                         .sum()
-                } else {
-                    0 // Missing branch has 0 elements
-                }
+                }).unwrap_or(0)
             }
         }
     }
@@ -1272,15 +1314,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         match node {
             NodeRef::Leaf(_, _) => 1, // An arena leaf is one leaf node
             NodeRef::Branch(id, _) => {
-                if let Some(branch) = self.get_branch(*id) {
+                self.with_branch(*id, |branch| {
                     branch
                         .children
                         .iter()
                         .map(|child| self.leaf_count_recursive(child))
                         .sum()
-                } else {
-                    0 // Missing branch has 0 leaf nodes
-                }
+                }).unwrap_or(0)
             }
         }
     }
@@ -1288,11 +1328,11 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Clear all items from the tree.
     pub fn clear(&mut self) {
         // Clear the existing arena leaf at id=0
-        if let Some(leaf) = self.get_leaf_mut(0) {
+        self.with_leaf_mut(0, |leaf| {
             leaf.keys.clear();
             leaf.values.clear();
             leaf.next = NULL_NODE;
-        }
+        });
         // Reset root to point to the cleared arena leaf
         self.root = NodeRef::Leaf(0, PhantomData);
     }
@@ -1400,25 +1440,21 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Set the next pointer of a leaf node in the arena.
     pub fn set_leaf_next(&mut self, id: NodeId, next_id: NodeId) -> bool {
-        if let Some(leaf) = self.get_leaf_mut(id) {
+        self.with_leaf_mut(id, |leaf| {
             leaf.next = next_id;
             true
-        } else {
-            false
-        }
+        }).unwrap_or(false)
     }
 
     /// Get the next pointer of a leaf node in the arena.
     pub fn get_leaf_next(&self, id: NodeId) -> Option<NodeId> {
-        if let Some(leaf) = self.get_leaf(id) {
+        self.with_leaf(id, |leaf| {
             if leaf.next == NULL_NODE {
                 None
             } else {
                 Some(leaf.next)
             }
-        } else {
-            None
-        }
+        }).unwrap_or(None)
     }
 
     // ============================================================================
