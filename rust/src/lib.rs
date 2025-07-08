@@ -1527,8 +1527,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         let start_bound = start_key.map_or(Bound::Unbounded, |k| Bound::Included(k));
         let end_bound = end_key.map_or(Bound::Unbounded, |k| Bound::Excluded(k));
 
-        let (start_info, skip_first, end_info) = self.resolve_range_bounds((start_bound, end_bound));
-        RangeIterator::new_with_skip_owned(self, start_info, skip_first, end_info)
+        let (start_info, skip_first, end_info, first_key) = self.resolve_range_bounds((start_bound, end_bound));
+        RangeIterator::new_with_skip_owned(self, start_info, skip_first, end_info, first_key)
     }
 
     /// Returns an iterator over key-value pairs in a range using Rust's range syntax.
@@ -1566,8 +1566,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     where
         R: RangeBounds<K>,
     {
-        let (start_info, skip_first, end_info) = self.resolve_range_bounds(range);
-        RangeIterator::new_with_skip_owned(self, start_info, skip_first, end_info)
+        let (start_info, skip_first, end_info, first_key) = self.resolve_range_bounds(range);
+        RangeIterator::new_with_skip_owned(self, start_info, skip_first, end_info, first_key)
     }
 
     /// Returns the first key-value pair in the tree.
@@ -1591,15 +1591,25 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         Option<(NodeId, usize)>,
         bool,
         Option<(K, bool)>,
+        Option<K>, // First key for excluded bounds optimization
     )
     where
         R: RangeBounds<K>,
     {
-        // Optimize start bound resolution - eliminate redundant Option handling
-        let (start_info, skip_first) = match range.start_bound() {
-            Bound::Included(key) => (self.find_range_start(key), false),
-            Bound::Excluded(key) => (self.find_range_start(key), true),
-            Bound::Unbounded => (self.get_first_leaf_id().map(|id| (id, 0)), false),
+        // Optimize start bound resolution - eliminate redundant arena lookups
+        let (start_info, skip_first, first_key) = match range.start_bound() {
+            Bound::Included(key) => {
+                let result = self.find_range_start_with_key(key, false);
+                (result.map(|(id, idx, _)| (id, idx)), false, None)
+            },
+            Bound::Excluded(key) => {
+                let result = self.find_range_start_with_key(key, true);
+                match result {
+                    Some((id, idx, first_key)) => (Some((id, idx)), true, first_key),
+                    None => (None, true, None),
+                }
+            },
+            Bound::Unbounded => (self.get_first_leaf_id().map(|id| (id, 0)), false, None),
         };
 
         // Avoid cloning end bound key when possible
@@ -1609,7 +1619,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             Bound::Unbounded => None,
         };
 
-        (start_info, skip_first, end_info)
+        (start_info, skip_first, end_info, first_key)
     }
 
     // ============================================================================
@@ -1625,7 +1635,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             match current {
                 NodeRef::Leaf(leaf_id, _) => {
                     let leaf = self.get_leaf(*leaf_id)?;
-                    
+
                     // Use binary search instead of linear search for better performance
                     let index = match leaf.keys.binary_search(start_key) {
                         Ok(exact_index) => exact_index,     // Found exact key
@@ -1638,6 +1648,53 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         // All keys in this leaf are < start_key, try next leaf
                         // Check if next leaf exists and has keys without redundant arena lookup
                         return Some((leaf.next, 0));
+                    } else {
+                        // No more leaves
+                        return None;
+                    }
+                }
+                NodeRef::Branch(branch_id, _) => {
+                    let branch = self.get_branch(*branch_id)?;
+                    let child_index = branch.find_child_index(start_key);
+
+                    if child_index < branch.children.len() {
+                        current = &branch.children[child_index];
+                    } else {
+                        return None;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Find the leaf node and index where a range should start, returning the first key if needed
+    /// This optimized version avoids redundant arena lookups by returning the key along with position
+    fn find_range_start_with_key(&self, start_key: &K, need_first_key: bool) -> Option<(NodeId, usize, Option<K>)> {
+        let mut current = &self.root;
+
+        // Navigate down to leaf level
+        loop {
+            match current {
+                NodeRef::Leaf(leaf_id, _) => {
+                    let leaf = self.get_leaf(*leaf_id)?;
+
+                    // Use binary search instead of linear search for better performance
+                    let index = match leaf.keys.binary_search(start_key) {
+                        Ok(exact_index) => exact_index,     // Found exact key
+                        Err(insert_index) => insert_index,  // First key >= start_key
+                    };
+
+                    if index < leaf.keys.len() {
+                        let first_key = if need_first_key {
+                            leaf.keys.get(index).cloned()
+                        } else {
+                            None
+                        };
+                        return Some((*leaf_id, index, first_key));
+                    } else if leaf.next != NULL_NODE {
+                        // All keys in this leaf are < start_key, try next leaf
+                        // No first key needed since we're starting at index 0 of next leaf
+                        return Some((leaf.next, 0, None));
                     } else {
                         // No more leaves
                         return None;
@@ -2884,6 +2941,7 @@ impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
         start_info: Option<(NodeId, usize)>,
         skip_first: bool,
         end_info: Option<(K, bool)>, // (end_key, is_inclusive)
+        first_key_opt: Option<K>, // Pre-fetched first key to avoid redundant arena lookup
     ) -> Self {
         let (iterator, first_key) = start_info
             .map(|(leaf_id, index)| {
@@ -2902,11 +2960,14 @@ impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
                 let iter =
                     ItemIterator::new_from_position_with_bounds(tree, leaf_id, index, end_bound);
 
-                // Extract first key if needed for skipping, avoid redundant arena lookup
+                // Use pre-fetched first key if available, otherwise fetch it
+                // This eliminates redundant arena lookups for excluded bounds
                 let first_key = if skip_first {
-                    tree.get_leaf(leaf_id)
-                        .and_then(|leaf| leaf.keys.get(index))
-                        .cloned()
+                    first_key_opt.or_else(|| {
+                        tree.get_leaf(leaf_id)
+                            .and_then(|leaf| leaf.keys.get(index))
+                            .cloned()
+                    })
                 } else {
                     None
                 };
