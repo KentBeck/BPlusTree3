@@ -12,11 +12,15 @@ mod compact_arena;
 mod macros;
 mod optimized_noderef;
 mod optimized_arena;
+mod global_capacity_nodes;
+mod global_capacity_tree;
 
 pub use optimized_noderef::{OptimizedNodeRef, NodeId as OptNodeId, NULL_NODE as OPT_NULL_NODE};
 pub use optimized_arena::{OptimizedArena, OptimizedArenaStats};
 pub use arena::{Arena, ArenaStats, NodeId as ArenaNodeId, NULL_NODE as ARENA_NULL_NODE};
 pub use compact_arena::{CompactArena, CompactArenaStats};
+pub use global_capacity_nodes::{GlobalCapacityLeafNode, GlobalCapacityBranchNode};
+pub use global_capacity_tree::GlobalCapacityBPlusTreeMap;
 
 // Constants
 const MIN_CAPACITY: usize = 4;
