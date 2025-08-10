@@ -8,9 +8,15 @@ use std::ops::{Bound, RangeBounds};
 
 // Import our new modules
 mod arena;
+mod compact_arena;
 mod macros;
+mod optimized_noderef;
+mod optimized_arena;
 
+pub use optimized_noderef::{OptimizedNodeRef, NodeId as OptNodeId, NULL_NODE as OPT_NULL_NODE};
+pub use optimized_arena::{OptimizedArena, OptimizedArenaStats};
 pub use arena::{Arena, ArenaStats, NodeId as ArenaNodeId, NULL_NODE as ARENA_NULL_NODE};
+pub use compact_arena::{CompactArena, CompactArenaStats};
 
 // Constants
 const MIN_CAPACITY: usize = 4;
@@ -218,11 +224,11 @@ pub struct BPlusTreeMap<K, V> {
     /// The root node of the tree.
     root: NodeRef<K, V>,
 
-    // Enhanced arena-based allocation using generic Arena<T>
-    /// Arena storage for leaf nodes.
-    leaf_arena: Arena<LeafNode<K, V>>,
-    /// Arena storage for branch nodes.
-    branch_arena: Arena<BranchNode<K, V>>,
+    // Compact arena-based allocation for better performance
+    /// Compact arena storage for leaf nodes (eliminates Option wrapper overhead).
+    leaf_arena: CompactArena<LeafNode<K, V>>,
+    /// Compact arena storage for branch nodes (eliminates Option wrapper overhead).
+    branch_arena: CompactArena<BranchNode<K, V>>,
 }
 
 /// Node reference that can be either a leaf or branch node
@@ -302,12 +308,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             return Err(BPlusTreeError::invalid_capacity(capacity, MIN_CAPACITY));
         }
 
-        // Initialize arena with the first leaf at id=0
-        let mut leaf_arena = Arena::new();
+        // Initialize compact arena with the first leaf at id=0
+        let mut leaf_arena = CompactArena::new();
         let root_id = leaf_arena.allocate(LeafNode::new(capacity));
 
-        // Initialize branch arena (starts empty)
-        let branch_arena = Arena::new();
+        // Initialize compact branch arena (starts empty)
+        let branch_arena = CompactArena::new();
 
         Ok(Self {
             capacity,
@@ -1506,6 +1512,16 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         ItemIterator::new(self)
     }
 
+    /// Returns a fast iterator over all key-value pairs using unsafe arena access.
+    /// This provides better performance by skipping bounds checks.
+    /// 
+    /// # Safety
+    /// This is safe to use as long as the tree structure is valid and no concurrent
+    /// modifications occur during iteration.
+    pub fn items_fast(&self) -> FastItemIterator<K, V> {
+        FastItemIterator::new(self)
+    }
+
     /// Returns an iterator over all keys in sorted order.
     pub fn keys(&self) -> KeyIterator<K, V> {
         KeyIterator::new(self)
@@ -1723,12 +1739,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ============================================================================
 
     /// Get statistics for the leaf node arena.
-    pub fn leaf_arena_stats(&self) -> arena::ArenaStats {
+    pub fn leaf_arena_stats(&self) -> CompactArenaStats {
         self.leaf_arena.stats()
     }
 
     /// Get statistics for the branch node arena.
-    pub fn branch_arena_stats(&self) -> arena::ArenaStats {
+    pub fn branch_arena_stats(&self) -> CompactArenaStats {
         self.branch_arena.stats()
     }
 
@@ -1796,6 +1812,18 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Get a mutable reference to a branch node in the arena.
     pub fn get_branch_mut(&mut self, id: NodeId) -> Option<&mut BranchNode<K, V>> {
         self.branch_arena.get_mut(id)
+    }
+
+    /// Unsafe fast access to leaf node (no bounds checking)
+    /// SAFETY: Caller must ensure id is valid and allocated
+    pub unsafe fn get_leaf_unchecked(&self, id: NodeId) -> &LeafNode<K, V> {
+        self.leaf_arena.get_unchecked(id)
+    }
+
+    /// Unsafe fast access to branch node (no bounds checking)
+    /// SAFETY: Caller must ensure id is valid and allocated
+    pub unsafe fn get_branch_unchecked(&self, id: NodeId) -> &BranchNode<K, V> {
+        self.branch_arena.get_unchecked(id)
     }
 
     
@@ -2470,6 +2498,17 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     }
 }
 
+impl<K, V> Default for LeafNode<K, V> {
+    fn default() -> Self {
+        Self {
+            capacity: 0,
+            keys: Vec::new(),
+            values: Vec::new(),
+            next: NULL_NODE,
+        }
+    }
+}
+
 impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     // ============================================================================
     // CONSTRUCTION
@@ -2697,6 +2736,16 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     }
 }
 
+impl<K, V> Default for BranchNode<K, V> {
+    fn default() -> Self {
+        Self {
+            capacity: 0,
+            keys: Vec::new(),
+            children: Vec::new(),
+        }
+    }
+}
+
 /// Iterator over key-value pairs in the B+ tree using the leaf linked list.
 pub struct ItemIterator<'a, K, V> {
     tree: &'a BPlusTreeMap<K, V>,
@@ -2705,6 +2754,14 @@ pub struct ItemIterator<'a, K, V> {
     end_key: Option<&'a K>,
     end_bound_key: Option<K>,
     end_inclusive: bool,
+    finished: bool,
+}
+
+/// Fast iterator over key-value pairs using unsafe arena access for better performance.
+pub struct FastItemIterator<'a, K, V> {
+    tree: &'a BPlusTreeMap<K, V>,
+    current_leaf_id: Option<NodeId>,
+    current_leaf_index: usize,
     finished: bool,
 }
 
@@ -2942,6 +2999,53 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for RangeIterator<'a, K, V> {
             }
 
             return Some(item);
+        }
+    }
+}
+
+impl<'a, K: Ord + Clone, V: Clone> FastItemIterator<'a, K, V> {
+    fn new(tree: &'a BPlusTreeMap<K, V>) -> Self {
+        // Start with the first (leftmost) leaf in the tree
+        let leftmost_id = tree.get_first_leaf_id();
+
+        Self {
+            tree,
+            current_leaf_id: leftmost_id,
+            current_leaf_index: 0,
+            finished: false,
+        }
+    }
+}
+
+impl<'a, K: Ord + Clone, V: Clone> Iterator for FastItemIterator<'a, K, V> {
+    type Item = (&'a K, &'a V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.finished {
+            return None;
+        }
+
+        loop {
+            let current_id = self.current_leaf_id?;
+            
+            // Use unsafe fast access to skip bounds checking
+            let leaf = unsafe { self.tree.get_leaf_unchecked(current_id) };
+            
+            if self.current_leaf_index < leaf.keys.len() {
+                let key = &leaf.keys[self.current_leaf_index];
+                let value = &leaf.values[self.current_leaf_index];
+                self.current_leaf_index += 1;
+                return Some((key, value));
+            } else {
+                // Move to next leaf
+                if leaf.next != NULL_NODE {
+                    self.current_leaf_id = Some(leaf.next);
+                    self.current_leaf_index = 0;
+                } else {
+                    self.finished = true;
+                    return None;
+                }
+            }
         }
     }
 }
