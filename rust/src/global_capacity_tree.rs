@@ -782,6 +782,83 @@ mod tests {
     }
 
     #[test]
+    fn test_range_performance_analysis() {
+        use std::time::Instant;
+        
+        let mut tree = GlobalCapacityBPlusTreeMap::new(16).unwrap();
+        
+        // Insert a large number of items
+        let n = 10000;
+        println!("Inserting {} items...", n);
+        let start = Instant::now();
+        for i in 0..n {
+            tree.insert(i, i * 10).unwrap();
+        }
+        let insert_time = start.elapsed();
+        println!("Insert time: {:?} ({:.2} µs per item)", insert_time, insert_time.as_micros() as f64 / n as f64);
+        
+        // Test range queries of different sizes
+        let range_sizes = vec![10, 100, 1000, 5000];
+        
+        for range_size in range_sizes {
+            let start_key = n / 2 - range_size / 2;  // Start from middle
+            let end_key = start_key + range_size;
+            
+            println!("\n--- Range query: {}..{} (size: {}) ---", start_key, end_key, range_size);
+            
+            // Time the range creation
+            let start = Instant::now();
+            let range_iter = tree.range(start_key..end_key);
+            let range_creation_time = start.elapsed();
+            
+            // Time the iteration
+            let start = Instant::now();
+            let items: Vec<_> = range_iter.collect();
+            let iteration_time = start.elapsed();
+            
+            println!("Range creation: {:?}", range_creation_time);
+            println!("Iteration time: {:?} ({:.2} µs per item)", iteration_time, iteration_time.as_micros() as f64 / items.len() as f64);
+            println!("Items collected: {}", items.len());
+            
+            // Check if time scales linearly with range size (O(n)) or logarithmically (O(log n))
+            if range_size > 10 {
+                let time_per_item = iteration_time.as_nanos() as f64 / items.len() as f64;
+                println!("Time per item: {:.2} ns", time_per_item);
+            }
+        }
+        
+        // Test single key lookup for comparison
+        println!("\n--- Single key lookups ---");
+        let lookup_keys = vec![100, 1000, 5000, 9000];
+        for key in lookup_keys {
+            let start = Instant::now();
+            let _value = tree.get(&key);
+            let lookup_time = start.elapsed();
+            println!("Lookup key {}: {:?}", key, lookup_time);
+        }
+        
+        // Test range creation time vs tree size to check if it's O(log n)
+        println!("\n--- Range creation scaling test ---");
+        let tree_sizes = vec![1000, 5000, 10000, 50000];
+        for tree_size in tree_sizes {
+            let mut test_tree = GlobalCapacityBPlusTreeMap::new(16).unwrap();
+            for i in 0..tree_size {
+                test_tree.insert(i, i * 10).unwrap();
+            }
+            
+            // Test range creation time for a fixed small range in the middle
+            let start_key = tree_size / 2;
+            let end_key = start_key + 10;
+            
+            let start = Instant::now();
+            let _range_iter = test_tree.range(start_key..end_key);
+            let range_creation_time = start.elapsed();
+            
+            println!("Tree size: {}, Range creation: {:?}", tree_size, range_creation_time);
+        }
+    }
+
+    #[test]
     fn test_key_value_operations() {
         let mut tree = GlobalCapacityBPlusTreeMap::new(4).unwrap();
         
