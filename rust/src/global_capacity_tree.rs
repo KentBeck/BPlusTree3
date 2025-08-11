@@ -915,7 +915,8 @@ mod tests {
 /// Iterator over a range of key-value pairs in the tree.
 pub struct RangeIterator<'a, K, V> {
     tree: &'a GlobalCapacityBPlusTreeMap<K, V>,
-    current_leaf: Option<NodeId>,
+    current_leaf_id: Option<NodeId>,
+    current_leaf_ref: Option<&'a GlobalCapacityLeafNode<K, V>>,
     current_pos: usize,
     start_bound: std::ops::Bound<K>,
     end_bound: std::ops::Bound<K>,
@@ -934,11 +935,15 @@ impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
             std::ops::Bound::Unbounded => std::ops::Bound::Unbounded,
         };
         
-        let (current_leaf, current_pos) = tree.find_range_start(&start_bound_ref);
+        let (current_leaf_id, current_pos) = tree.find_range_start(&start_bound_ref);
+        
+        // Get the initial leaf reference if we have a starting leaf
+        let current_leaf_ref = current_leaf_id.and_then(|id| tree.leaf_arena.get(id));
         
         RangeIterator {
             tree,
-            current_leaf,
+            current_leaf_id,
+            current_leaf_ref,
             current_pos,
             start_bound,
             end_bound,
@@ -956,17 +961,8 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for RangeIterator<'a, K, V> {
         }
 
         loop {
-            // Check if we have a current leaf
-            let leaf_id = match self.current_leaf {
-                Some(id) => id,
-                None => {
-                    self.finished = true;
-                    return None;
-                }
-            };
-
-            // Get the leaf node
-            let leaf = match self.tree.leaf_arena.get(leaf_id) {
+            // Check if we have a current leaf reference
+            let leaf = match self.current_leaf_ref {
                 Some(leaf) => leaf,
                 None => {
                     self.finished = true;
@@ -998,8 +994,16 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for RangeIterator<'a, K, V> {
             // Exhausted current leaf, move to next leaf
             let next_leaf_id = leaf.next();
             if next_leaf_id != crate::NULL_NODE {
-                self.current_leaf = Some(next_leaf_id);
+                // Update to next leaf - this is the ONLY arena access during iteration
+                self.current_leaf_id = Some(next_leaf_id);
+                self.current_leaf_ref = self.tree.leaf_arena.get(next_leaf_id);
                 self.current_pos = 0;
+                
+                // Check if we successfully got the next leaf
+                if self.current_leaf_ref.is_none() {
+                    self.finished = true;
+                    return None;
+                }
                 // Continue the loop to check the new leaf
             } else {
                 // No more leaves

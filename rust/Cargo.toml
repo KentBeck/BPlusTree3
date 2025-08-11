@@ -30,5 +30,9 @@ name = "quick_clone_bench"
 harness = false
 
 [[bench]]
+name = "range_profiling"
+harness = false
+
+[[bench]]
 name = "profiling_benchmark"
 harness = false
