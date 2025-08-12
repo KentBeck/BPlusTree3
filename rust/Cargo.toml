@@ -29,22 +29,3 @@ harness = false
 name = "quick_clone_bench"
 harness = false
 
-[[bench]]
-name = "range_profiling"
-harness = false
-
-[[bench]]
-name = "profiling_benchmark"
-harness = false
-
-[[bench]]
-name = "large_range_profiling"
-harness = false
-
-[[bin]]
-name = "gprof_profiling"
-path = "src/gprof_profiling.rs"
-
-[[bench]]
-name = "auditor_benchmark"
-harness = false

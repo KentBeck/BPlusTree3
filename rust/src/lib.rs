@@ -10,23 +10,9 @@ use std::ops::{Bound, RangeBounds};
 mod arena;
 mod compact_arena;
 mod macros;
-mod global_capacity_nodes;
-mod global_capacity_tree;
-mod profiling_test;
-mod perf_test;
-mod arena_access_analysis;
-mod arena_access_bug;
-mod leaf_cache_performance_test;
-mod profiling_benchmark;
-mod honest_auditor_test;
-mod benchmark_reconciliation;
-mod final_auditor_experiment;
-mod auditor_ready_experiment;
 
 pub use arena::{Arena, ArenaStats, NodeId as ArenaNodeId, NULL_NODE as ARENA_NULL_NODE};
 pub use compact_arena::{CompactArena, CompactArenaStats};
-pub use global_capacity_nodes::{GlobalCapacityLeafNode, GlobalCapacityBranchNode};
-pub use global_capacity_tree::GlobalCapacityBPlusTreeMap;
 
 // Constants
 const MIN_CAPACITY: usize = 4;
