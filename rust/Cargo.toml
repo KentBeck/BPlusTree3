@@ -29,3 +29,6 @@ harness = false
 name = "quick_clone_bench"
 harness = false
 
+[[bench]]
+name = "range_scan_profiling"
+harness = false
