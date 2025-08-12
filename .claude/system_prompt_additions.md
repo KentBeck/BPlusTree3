@@ -1,4 +1,4 @@
-# System Prompt Additions for Code Quality
+co# System Prompt Additions for Code Quality
 
 ## Code Quality Standards
 

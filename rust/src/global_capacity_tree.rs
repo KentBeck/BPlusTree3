@@ -3,7 +3,7 @@
 
 use crate::{
     BPlusTreeError, InitResult, BTreeResult, NodeRef, NodeId,
-    GlobalCapacityLeafNode, GlobalCapacityBranchNode, OptimizedArena
+    GlobalCapacityLeafNode, GlobalCapacityBranchNode, CompactArena
 };
 use std::marker::PhantomData;
 
@@ -15,9 +15,9 @@ pub struct GlobalCapacityBPlusTreeMap<K, V> {
     /// The root node of the tree.
     root: NodeRef<K, V>,
     /// Arena storage for leaf nodes.
-    leaf_arena: OptimizedArena<GlobalCapacityLeafNode<K, V>>,
+    leaf_arena: CompactArena<GlobalCapacityLeafNode<K, V>>,
     /// Arena storage for branch nodes.
-    branch_arena: OptimizedArena<GlobalCapacityBranchNode<K, V>>,
+    branch_arena: CompactArena<GlobalCapacityBranchNode<K, V>>,
 }
 
 impl<K: Ord + Clone, V: Clone> GlobalCapacityBPlusTreeMap<K, V> {
@@ -29,7 +29,7 @@ impl<K: Ord + Clone, V: Clone> GlobalCapacityBPlusTreeMap<K, V> {
             return Err(BPlusTreeError::invalid_capacity(capacity, MIN_CAPACITY));
         }
 
-        let mut leaf_arena = OptimizedArena::new();
+        let mut leaf_arena = CompactArena::new();
         let root_leaf = GlobalCapacityLeafNode::new(capacity);
         let root_id = leaf_arena.allocate(root_leaf);
 
@@ -37,7 +37,7 @@ impl<K: Ord + Clone, V: Clone> GlobalCapacityBPlusTreeMap<K, V> {
             capacity,
             root: NodeRef::Leaf(root_id, PhantomData),
             leaf_arena,
-            branch_arena: OptimizedArena::new(),
+            branch_arena: CompactArena::new(),
         })
     }
 

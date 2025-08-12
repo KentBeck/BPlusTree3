@@ -10,8 +10,6 @@ use std::ops::{Bound, RangeBounds};
 mod arena;
 mod compact_arena;
 mod macros;
-mod optimized_noderef;
-mod optimized_arena;
 mod global_capacity_nodes;
 mod global_capacity_tree;
 mod profiling_test;
@@ -25,8 +23,6 @@ mod benchmark_reconciliation;
 mod final_auditor_experiment;
 mod auditor_ready_experiment;
 
-pub use optimized_noderef::{OptimizedNodeRef, NodeId as OptNodeId, NULL_NODE as OPT_NULL_NODE};
-pub use optimized_arena::{OptimizedArena, OptimizedArenaStats};
 pub use arena::{Arena, ArenaStats, NodeId as ArenaNodeId, NULL_NODE as ARENA_NULL_NODE};
 pub use compact_arena::{CompactArena, CompactArenaStats};
 pub use global_capacity_nodes::{GlobalCapacityLeafNode, GlobalCapacityBranchNode};

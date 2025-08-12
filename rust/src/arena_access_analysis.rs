@@ -6,14 +6,14 @@ use std::sync::Arc;
 
 // Mock arena that counts accesses
 pub struct CountingArena<T> {
-    inner: crate::optimized_arena::OptimizedArena<T>,
+    inner: crate::compact_arena::CompactArena<T>,
     access_count: Arc<AtomicUsize>,
 }
 
 impl<T> CountingArena<T> {
     pub fn new() -> Self {
         Self {
-            inner: crate::optimized_arena::OptimizedArena::new(),
+            inner: crate::compact_arena::CompactArena::new(),
             access_count: Arc::new(AtomicUsize::new(0)),
         }
     }
