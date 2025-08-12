@@ -12,6 +12,7 @@ mod compact_arena;
 mod macros;
 mod range_bottleneck_analysis;
 mod detailed_iterator_analysis;
+mod comprehensive_performance_benchmark;
 
 pub use arena::{Arena, ArenaStats, NodeId as ArenaNodeId, NULL_NODE as ARENA_NULL_NODE};
 pub use compact_arena::{CompactArena, CompactArenaStats};
@@ -168,6 +169,77 @@ impl<T> BTreeResultExt<T> for Result<T, BPlusTreeError> {
                 T::default()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod leaf_caching_tests {
+    use super::*;
+
+    #[test]
+    fn test_leaf_caching_optimization_proof() {
+        let mut tree = BPlusTreeMap::new(4).unwrap(); // Small capacity to force multiple leaves
+        
+        // Insert enough data to span multiple leaves
+        for i in 0..20 {
+            tree.insert(i, i * 100);
+        }
+        
+        // Create iterator and verify it has cached leaf reference
+        let mut iter = tree.items();
+        
+        // First call to next() should populate the cache
+        let first_item = iter.next();
+        assert_eq!(first_item, Some((&0, &0)));
+        
+        // The key insight: iter.current_leaf_ref should now be Some(...)
+        // This proves leaf caching is working
+        assert!(iter.current_leaf_ref.is_some(), "Leaf reference should be cached after first next() call");
+        
+        // Subsequent calls within the same leaf should use cached reference
+        let second_item = iter.next();
+        assert_eq!(second_item, Some((&1, &100)));
+        
+        // The cached reference should still be valid
+        assert!(iter.current_leaf_ref.is_some(), "Leaf reference should remain cached within same leaf");
+        
+        // Continue iterating to verify caching works across leaf boundaries
+        let mut count = 2; // Already consumed 2 items
+        for (k, v) in iter {
+            assert_eq!(*k, count);
+            assert_eq!(*v, count * 100);
+            count += 1;
+        }
+        assert_eq!(count, 20);
+    }
+
+    #[test]
+    fn test_fast_iterator_also_uses_leaf_caching() {
+        let mut tree = BPlusTreeMap::new(4).unwrap();
+        
+        // Insert data spanning multiple leaves
+        for i in 0..20 {
+            tree.insert(i, i * 100);
+        }
+        
+        // Test FastItemIterator also uses leaf caching
+        let mut fast_iter = tree.items_fast();
+        
+        // First call should populate cache
+        let first_item = fast_iter.next();
+        assert_eq!(first_item, Some((&0, &0)));
+        
+        // Verify FastItemIterator also caches leaf references
+        assert!(fast_iter.current_leaf_ref.is_some(), "FastItemIterator should also cache leaf references");
+        
+        // Verify it works correctly
+        let mut count = 1; // Already consumed 1 item
+        for (k, v) in fast_iter {
+            assert_eq!(*k, count);
+            assert_eq!(*v, count * 100);
+            count += 1;
+        }
+        assert_eq!(count, 20);
     }
 }
 
