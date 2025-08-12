@@ -19,6 +19,11 @@ mod perf_test;
 mod arena_access_analysis;
 mod arena_access_bug;
 mod leaf_cache_performance_test;
+mod profiling_benchmark;
+mod honest_auditor_test;
+mod benchmark_reconciliation;
+mod final_auditor_experiment;
+mod auditor_ready_experiment;
 
 pub use optimized_noderef::{OptimizedNodeRef, NodeId as OptNodeId, NULL_NODE as OPT_NULL_NODE};
 pub use optimized_arena::{OptimizedArena, OptimizedArenaStats};
