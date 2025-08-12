@@ -10,6 +10,8 @@ use std::ops::{Bound, RangeBounds};
 mod arena;
 mod compact_arena;
 mod macros;
+mod range_bottleneck_analysis;
+mod detailed_iterator_analysis;
 
 pub use arena::{Arena, ArenaStats, NodeId as ArenaNodeId, NULL_NODE as ARENA_NULL_NODE};
 pub use compact_arena::{CompactArena, CompactArenaStats};
