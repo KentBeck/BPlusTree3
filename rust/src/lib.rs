@@ -2746,6 +2746,7 @@ impl<K, V> Default for BranchNode<K, V> {
 pub struct ItemIterator<'a, K, V> {
     tree: &'a BPlusTreeMap<K, V>,
     current_leaf_id: Option<NodeId>,
+    current_leaf_ref: Option<&'a LeafNode<K, V>>, // CACHED leaf reference
     current_leaf_index: usize,
     end_key: Option<&'a K>,
     end_bound_key: Option<K>,
@@ -2757,6 +2758,7 @@ pub struct ItemIterator<'a, K, V> {
 pub struct FastItemIterator<'a, K, V> {
     tree: &'a BPlusTreeMap<K, V>,
     current_leaf_id: Option<NodeId>,
+    current_leaf_ref: Option<&'a LeafNode<K, V>>, // CACHED leaf reference
     current_leaf_index: usize,
     finished: bool,
 }
@@ -2765,10 +2767,14 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
     fn new(tree: &'a BPlusTreeMap<K, V>) -> Self {
         // Start with the first (leftmost) leaf in the tree
         let leftmost_id = tree.get_first_leaf_id();
+        
+        // Get the initial leaf reference if we have a starting leaf
+        let current_leaf_ref = leftmost_id.and_then(|id| tree.get_leaf(id));
 
         Self {
             tree,
             current_leaf_id: leftmost_id,
+            current_leaf_ref,
             current_leaf_index: 0,
             end_key: None,
             end_bound_key: None,
@@ -2791,9 +2797,13 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
             Bound::Unbounded => (None, false),
         };
 
+        // Get the initial leaf reference
+        let current_leaf_ref = tree.get_leaf(start_leaf_id);
+
         Self {
             tree,
             current_leaf_id: Some(start_leaf_id),
+            current_leaf_ref,
             current_leaf_index: start_index,
             end_key: None,
             end_bound_key,
@@ -2812,10 +2822,9 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
         }
 
         loop {
-            // Use Option::and_then to chain operations cleanly
+            // Use cached leaf reference - NO arena lookup here!
             let result = self
-                .current_leaf_id
-                .and_then(|leaf_id| self.tree.get_leaf(leaf_id))
+                .current_leaf_ref
                 .and_then(|leaf| self.try_get_next_item(leaf));
 
             match result {
@@ -2871,10 +2880,14 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
     /// Helper method to advance to the next leaf
     /// Returns Some(true) if successfully advanced, Some(false) if no more leaves, None if invalid leaf
     fn advance_to_next_leaf(&mut self) -> Option<bool> {
-        let current_leaf = self.current_leaf_id?;
-        let leaf = self.tree.get_leaf(current_leaf)?;
-
-        self.current_leaf_id = (leaf.next != NULL_NODE).then_some(leaf.next);
+        // Use cached leaf reference to get next leaf ID
+        let leaf = self.current_leaf_ref?;
+        
+        let next_leaf_id = (leaf.next != NULL_NODE).then_some(leaf.next);
+        
+        // Update both ID and cached reference - this is the ONLY arena access during iteration
+        self.current_leaf_id = next_leaf_id;
+        self.current_leaf_ref = next_leaf_id.and_then(|id| self.tree.get_leaf(id));
         self.current_leaf_index = 0;
 
         Some(self.current_leaf_id.is_some())
@@ -3003,10 +3016,14 @@ impl<'a, K: Ord + Clone, V: Clone> FastItemIterator<'a, K, V> {
     fn new(tree: &'a BPlusTreeMap<K, V>) -> Self {
         // Start with the first (leftmost) leaf in the tree
         let leftmost_id = tree.get_first_leaf_id();
+        
+        // Get the initial leaf reference if we have a starting leaf
+        let current_leaf_ref = leftmost_id.and_then(|id| unsafe { Some(tree.get_leaf_unchecked(id)) });
 
         Self {
             tree,
             current_leaf_id: leftmost_id,
+            current_leaf_ref,
             current_leaf_index: 0,
             finished: false,
         }
@@ -3022,10 +3039,8 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for FastItemIterator<'a, K, V> {
         }
 
         loop {
-            let current_id = self.current_leaf_id?;
-            
-            // Use unsafe fast access to skip bounds checking
-            let leaf = unsafe { self.tree.get_leaf_unchecked(current_id) };
+            // Use cached leaf reference - NO arena lookup here!
+            let leaf = self.current_leaf_ref?;
             
             if self.current_leaf_index < leaf.keys.len() {
                 let key = &leaf.keys[self.current_leaf_index];
@@ -3033,9 +3048,10 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for FastItemIterator<'a, K, V> {
                 self.current_leaf_index += 1;
                 return Some((key, value));
             } else {
-                // Move to next leaf
+                // Move to next leaf - this is the ONLY arena access during iteration
                 if leaf.next != NULL_NODE {
                     self.current_leaf_id = Some(leaf.next);
+                    self.current_leaf_ref = unsafe { Some(self.tree.get_leaf_unchecked(leaf.next)) };
                     self.current_leaf_index = 0;
                 } else {
                     self.finished = true;
@@ -3045,3 +3061,4 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for FastItemIterator<'a, K, V> {
         }
     }
 }
+
