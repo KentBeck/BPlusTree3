@@ -292,6 +292,24 @@ pub struct ArenaDebugInfo {
     pub free_ids: Vec<NodeId>,
 }
 
+// ============================================================================
+// BPLUSTREE ARENA ALLOCATION HELPERS
+// ============================================================================
+
+use crate::types::{BPlusTreeMap, LeafNode, BranchNode};
+
+impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
+    /// Allocate a new leaf node in the arena and return its ID.
+    pub fn allocate_leaf(&mut self, leaf: LeafNode<K, V>) -> NodeId {
+        self.leaf_arena.allocate(leaf)
+    }
+
+    /// Allocate a new branch node in the arena and return its ID.
+    pub fn allocate_branch(&mut self, branch: BranchNode<K, V>) -> NodeId {
+        self.branch_arena.allocate(branch)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -9,15 +9,7 @@ use crate::types::{BPlusTreeMap, NodeRef, LeafNode, BranchNode, NodeId, InsertRe
 use std::marker::PhantomData;
 
 impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
-    /// Allocate a new leaf node in the arena and return its ID.
-    pub fn allocate_leaf(&mut self, leaf: LeafNode<K, V>) -> NodeId {
-        self.leaf_arena.allocate(leaf)
-    }
-
-    /// Allocate a new branch node in the arena and return its ID.
-    pub fn allocate_branch(&mut self, branch: BranchNode<K, V>) -> NodeId {
-        self.branch_arena.allocate(branch)
-    }
+    // allocate_leaf and allocate_branch methods moved to arena.rs module
 
     /// Create a new root node when the current root splits.
     /// New roots are the only BranchNodes allowed to remain underfull.
