@@ -274,92 +274,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 }
 
-impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
-    /// Get value for a key from this leaf node.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The key to look up
-    ///
-    /// # Returns
-    ///
-    /// A reference to the value if the key exists, `None` otherwise.
-    pub fn get(&self, key: &K) -> Option<&V> {
-        match self.keys.binary_search(key) {
-            Ok(index) => Some(&self.values[index]),
-            Err(_) => None,
-        }
-    }
+// LeafNode implementation moved to node.rs module
 
-    /// Get a mutable reference to the value for a key from this leaf node.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The key to look up
-    ///
-    /// # Returns
-    ///
-    /// A mutable reference to the value if the key exists, `None` otherwise.
-    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        match self.keys.binary_search(key) {
-            Ok(index) => Some(&mut self.values[index]),
-            Err(_) => None,
-        }
-    }
-}
-
-impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
-    /// Get the child node for a given key.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The key to find the appropriate child for
-    ///
-    /// # Returns
-    ///
-    /// A reference to the child node that should contain the key.
-    pub fn get_child(&self, key: &K) -> Option<&NodeRef<K, V>> {
-        let child_index = self.find_child_index(key);
-        if child_index < self.children.len() {
-            Some(&self.children[child_index])
-        } else {
-            None
-        }
-    }
-
-    /// Get a mutable reference to the child node for a given key.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The key to find the appropriate child for
-    ///
-    /// # Returns
-    ///
-    /// A mutable reference to the child node that should contain the key.
-    pub fn get_child_mut(&mut self, key: &K) -> Option<&mut NodeRef<K, V>> {
-        let child_index = self.find_child_index(key);
-        if child_index >= self.children.len() {
-            return None;
-        }
-        Some(&mut self.children[child_index])
-    }
-
-    /// Find the index of the child that should contain the given key.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The key to find the child index for
-    ///
-    /// # Returns
-    ///
-    /// The index of the child that should contain the key.
-    pub fn find_child_index(&self, key: &K) -> usize {
-        match self.keys.binary_search(key) {
-            Ok(index) => index + 1, // Key found, go to right child
-            Err(index) => index,    // Key not found, go to left child at insertion point
-        }
-    }
-}
+// BranchNode implementation moved to node.rs module
 
 #[cfg(test)]
 mod tests {
