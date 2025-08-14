@@ -14,6 +14,7 @@ mod types;
 mod construction;
 mod get_operations;
 mod insert_operations;
+mod delete_operations;
 mod detailed_iterator_analysis;
 mod comprehensive_performance_benchmark;
 
