@@ -127,19 +127,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     ///
     /// * `key` - The key to look up
     ///
-    /// # Returns
-    ///
-    /// A reference to the value if the key exists, `None` otherwise.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use bplustree::BPlusTreeMap;
-    ///
-    /// let mut tree = BPlusTreeMap::new(16).unwrap();
     // GET operations moved to get_operations.rs module
 
-    /// Helper to check if a node is underfull
+    /// Helper to check if a node is underfull.
     fn is_node_underfull(&self, node_ref: &NodeRef<K, V>) -> bool {
         match node_ref {
             NodeRef::Leaf(id, _) => self
