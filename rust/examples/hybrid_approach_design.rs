@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 use std::time::Instant;
-use std::ptr::NonNull;
+// NonNull import removed - not used in this example
 
 // Approach 1: Compact Arena (Vec<T> instead of Vec<Option<T>>)
 #[derive(Debug)]

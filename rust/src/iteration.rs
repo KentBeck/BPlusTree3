@@ -14,7 +14,7 @@ use crate::types::{BPlusTreeMap, NodeId, LeafNode, NULL_NODE};
 pub struct ItemIterator<'a, K, V> {
     tree: &'a BPlusTreeMap<K, V>,
     current_leaf_id: Option<NodeId>,
-    current_leaf_ref: Option<&'a LeafNode<K, V>>, // CACHED leaf reference
+    pub current_leaf_ref: Option<&'a LeafNode<K, V>>, // CACHED leaf reference
     current_leaf_index: usize,
     end_key: Option<&'a K>,
     end_bound_key: Option<K>,
@@ -26,7 +26,7 @@ pub struct ItemIterator<'a, K, V> {
 pub struct FastItemIterator<'a, K, V> {
     tree: &'a BPlusTreeMap<K, V>,
     current_leaf_id: Option<NodeId>,
-    current_leaf_ref: Option<&'a LeafNode<K, V>>, // CACHED leaf reference
+    pub current_leaf_ref: Option<&'a LeafNode<K, V>>, // CACHED leaf reference
     current_leaf_index: usize,
     finished: bool,
 }
@@ -276,22 +276,20 @@ impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
         skip_first: bool,
         end_info: Option<(K, bool)>, // (end_key, is_inclusive)
     ) -> Self {
-        let (iterator, first_key) = start_info
-            .map(|(leaf_id, index)| {
-                // Create iterator with appropriate end bound using Option combinators
-                let end_bound = end_info
-                    .as_ref()
-                    .map(|(key, is_inclusive)| {
-                        if *is_inclusive {
-                            Bound::Included(key)
-                        } else {
-                            Bound::Excluded(key)
-                        }
-                    })
-                    .unwrap_or(Bound::Unbounded);
+        // Clone end_info to avoid borrowing issues
+        let end_info_clone = end_info.clone();
 
-                let iter =
-                    ItemIterator::new_from_position_with_bounds(tree, leaf_id, index, end_bound);
+        let (iterator, first_key) = start_info
+            .map(move |(leaf_id, index)| {
+                // Create iterator with unbounded end, we'll handle bounds in the iterator itself
+                let end_bound = Bound::Unbounded;
+                let mut iter = ItemIterator::new_from_position_with_bounds(tree, leaf_id, index, end_bound);
+
+                // Set the end bound using owned key if provided
+                if let Some((key, is_inclusive)) = end_info_clone {
+                    iter.end_bound_key = Some(key);
+                    iter.end_inclusive = is_inclusive;
+                }
 
                 // Extract first key if needed for skipping, avoid redundant arena lookup
                 let first_key = if skip_first {

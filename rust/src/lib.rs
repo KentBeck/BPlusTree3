@@ -32,10 +32,7 @@ pub use iteration::{ItemIterator, FastItemIterator, KeyIterator, ValueIterator, 
 
 use std::marker::PhantomData;
 
-use error::TreeResult;
-use types::{
-    InsertResult, RemoveResult, SplitNodeData,
-};
+// Internal type imports removed - no longer needed in main lib.rs
 
 
 

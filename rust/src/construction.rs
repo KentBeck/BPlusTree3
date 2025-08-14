@@ -269,6 +269,7 @@ pub mod validation {
     /// # Returns
     ///
     /// Returns `Ok(())` if valid, `Err(BPlusTreeError)` otherwise.
+    #[allow(dead_code)]
     pub fn validate_capacity(capacity: usize) -> BTreeResult<()> {
         if capacity < MIN_CAPACITY {
             Err(BPlusTreeError::invalid_capacity(capacity, MIN_CAPACITY))
@@ -289,6 +290,7 @@ pub mod validation {
     /// # Returns
     ///
     /// Recommended capacity (always >= MIN_CAPACITY)
+    #[allow(dead_code)]
     pub fn recommended_capacity(expected_elements: usize) -> usize {
         if expected_elements < 100 {
             MIN_CAPACITY

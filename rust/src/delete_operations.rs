@@ -4,8 +4,8 @@
 //! key-value removal, node merging, tree shrinking, and helper methods for
 //! managing the tree structure during deletions.
 
-use crate::error::{BPlusTreeError, BTreeResult, ModifyResult};
-use crate::types::{BPlusTreeMap, NodeRef, LeafNode, BranchNode, NodeId, RemoveResult};
+use crate::error::{BPlusTreeError, ModifyResult};
+use crate::types::{BPlusTreeMap, NodeRef, LeafNode, NodeId, RemoveResult};
 use std::marker::PhantomData;
 
 impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
@@ -65,8 +65,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             NodeRef::Leaf(id, _) => {
                 self.get_leaf_mut(*id)
                     .map_or(RemoveResult::Updated(None, false), |leaf| {
-                        let removed_value = leaf.remove(key);
-                        let is_underfull = leaf.is_underfull();
+                        let (removed_value, is_underfull) = leaf.remove(key);
                         RemoveResult::Updated(removed_value, is_underfull)
                     })
             }
@@ -233,7 +232,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // Test module for delete operations
 
     #[test]
     fn test_delete_operations_module_exists() {

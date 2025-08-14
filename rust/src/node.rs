@@ -5,7 +5,6 @@
 //! other node-level operations.
 
 use crate::types::{LeafNode, BranchNode, NodeRef, NodeId, NULL_NODE, InsertResult, SplitNodeData};
-use std::marker::PhantomData;
 
 // ============================================================================
 // LEAF NODE IMPLEMENTATION
@@ -80,7 +79,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
                 self.insert_at_index(index, key, value);
 
                 // Now split the overfull node
-                let mut new_right = self.split();
+                let new_right = self.split();
 
                 // Determine the separator key (first key of right node)
                 let separator_key = new_right.keys[0].clone();
@@ -120,7 +119,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         let right_values = self.values.split_off(mid);
 
         // Create the new right node
-        let mut new_right = LeafNode {
+        let new_right = LeafNode {
             capacity: self.capacity,
             keys: right_keys,
             values: right_values,
@@ -287,7 +286,7 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         // For branch nodes, we need to ensure both resulting nodes have at least min_keys
         // The middle key gets promoted, so we need at least min_keys on each side
         let min_keys = self.min_keys();
-        let total_keys = self.keys.len();
+        let _total_keys = self.keys.len();
 
         // For branch splits, we promote the middle key, so we need:
         // - Left side: min_keys keys

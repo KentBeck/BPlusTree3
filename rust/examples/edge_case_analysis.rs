@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 use std::hint::black_box;
 
-fn benchmark_operation<F>(name: &str, iterations: usize, mut f: F) -> std::time::Duration 
+fn benchmark_operation<F>(_name: &str, iterations: usize, mut f: F) -> std::time::Duration
 where F: FnMut() {
     // Warmup
     for _ in 0..std::cmp::min(iterations/10, 100) {

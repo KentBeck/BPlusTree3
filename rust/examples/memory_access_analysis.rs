@@ -143,7 +143,7 @@ fn main() {
     let start = Instant::now();
     for _ in 0..100000 {
         let iter = btree.iter();
-        std::hint::black_box(iter);
+        let _ = std::hint::black_box(iter);
     }
     let btree_iter_creation = start.elapsed();
     

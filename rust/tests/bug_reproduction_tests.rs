@@ -1,6 +1,6 @@
 /// Test cases to reproduce specific bugs found in the B+ tree implementation
 /// Each test demonstrates a concrete failure case for the identified issues
-use bplustree::BPlusTreeMap;
+// BPlusTreeMap import removed - using test_utils instead
 
 mod test_utils;
 use test_utils::*;

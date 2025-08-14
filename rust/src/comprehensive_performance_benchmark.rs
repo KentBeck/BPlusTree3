@@ -4,6 +4,7 @@ use std::time::Instant;
 
 /// Comprehensive performance benchmark comparing BPlusTreeMap vs BTreeMap
 /// Tests insert, delete, access, and iterate operations on large datasets
+#[allow(dead_code)]
 pub fn run_comprehensive_benchmark() {
     println!("=== COMPREHENSIVE PERFORMANCE BENCHMARK ===");
     println!("BPlusTreeMap vs BTreeMap - Large Tree & Large Capacity\n");
@@ -78,7 +79,7 @@ fn benchmark_access(bplus: &BPlusTreeMap<usize, usize>, btree: &BTreeMap<usize, 
     println!();
 }
 
-fn benchmark_insert(bplus: &BPlusTreeMap<usize, usize>, btree: &BTreeMap<usize, usize>, tree_size: usize, sample_size: usize) {
+fn benchmark_insert(bplus: &BPlusTreeMap<usize, usize>, _btree: &BTreeMap<usize, usize>, tree_size: usize, sample_size: usize) {
     println!("➕ INSERT Performance:");
     
     // Generate new keys for insertion (beyond existing range)
@@ -124,7 +125,7 @@ fn benchmark_insert(bplus: &BPlusTreeMap<usize, usize>, btree: &BTreeMap<usize, 
     println!();
 }
 
-fn benchmark_delete(bplus: &BPlusTreeMap<usize, usize>, btree: &BTreeMap<usize, usize>, tree_size: usize, sample_size: usize) {
+fn benchmark_delete(bplus: &BPlusTreeMap<usize, usize>, _btree: &BTreeMap<usize, usize>, tree_size: usize, sample_size: usize) {
     println!("➖ DELETE Performance:");
     
     // Generate keys to delete (from existing range)

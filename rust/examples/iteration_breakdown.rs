@@ -1,5 +1,5 @@
 use bplustree::BPlusTreeMap;
-use std::collections::BTreeMap;
+// BTreeMap import removed - not used in this example
 use std::time::Instant;
 
 fn main() {

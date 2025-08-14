@@ -1,8 +1,9 @@
-use crate::{BPlusTreeMap, FastItemIterator};
+use crate::BPlusTreeMap;
 use std::collections::BTreeMap;
 use std::time::Instant;
 
 /// Detailed analysis of what actually happens in each next() call
+#[allow(dead_code)]
 pub fn analyze_iterator_implementation() {
     println!("=== DETAILED ITERATOR IMPLEMENTATION ANALYSIS ===");
     println!("Examining actual arena access patterns in next() calls\n");
@@ -68,7 +69,7 @@ fn analyze_arena_access_pattern(bplus: &BPlusTreeMap<usize, usize>, size: usize)
 
 fn compare_iterator_implementations(bplus: &BPlusTreeMap<usize, usize>, size: usize) {
     let start = size / 2;
-    let end = start + 1000;
+    let _end = start + 1000;
     let iterations = 100;
     
     // Test regular ItemIterator
