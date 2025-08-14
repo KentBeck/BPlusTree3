@@ -138,54 +138,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
-    // ============================================================================
-    // ARENA STATISTICS AND MANAGEMENT
-    // ============================================================================
-
-    /// Get the number of free leaf nodes in the arena.
-    pub fn free_leaf_count(&self) -> usize {
-        self.leaf_arena.free_count()
-    }
-
-    /// Get the number of allocated leaf nodes in the arena.
-    pub fn allocated_leaf_count(&self) -> usize {
-        self.leaf_arena.allocated_count()
-    }
-
-    /// Get the leaf arena utilization ratio.
-    pub fn leaf_utilization(&self) -> f64 {
-        self.leaf_arena.utilization()
-    }
-
-    /// Get statistics for the leaf node arena.
-    pub fn leaf_arena_stats(&self) -> crate::compact_arena::CompactArenaStats {
-        self.leaf_arena.stats()
-    }
-
-    /// Get statistics for the branch node arena.
-    pub fn branch_arena_stats(&self) -> crate::compact_arena::CompactArenaStats {
-        self.branch_arena.stats()
-    }
-
-    /// Set the next pointer of a leaf node in the arena.
-    pub fn set_leaf_next(&mut self, id: NodeId, next_id: NodeId) -> bool {
-        self.get_leaf_mut(id)
-            .map(|leaf| {
-                leaf.next = next_id;
-                true
-            })
-            .unwrap_or(false)
-    }
-
-    /// Deallocate a leaf node from the arena.
-    pub fn deallocate_leaf(&mut self, id: NodeId) -> Option<LeafNode<K, V>> {
-        self.leaf_arena.deallocate(id)
-    }
-
-    /// Deallocate a branch node from the arena.
-    pub fn deallocate_branch(&mut self, id: NodeId) -> Option<crate::types::BranchNode<K, V>> {
-        self.branch_arena.deallocate(id)
-    }
+    // Arena statistics and management methods moved to arena.rs module
 
     // ============================================================================
     // CHILD LOOKUP HELPERS
@@ -208,19 +161,5 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         })
     }
 
-    // ============================================================================
-    // UNSAFE ARENA ACCESS
-    // ============================================================================
-
-    /// Unsafe fast access to leaf node (no bounds checking)
-    /// SAFETY: Caller must ensure id is valid and allocated
-    pub unsafe fn get_leaf_unchecked(&self, id: NodeId) -> &LeafNode<K, V> {
-        self.leaf_arena.get_unchecked(id)
-    }
-
-    /// Unsafe fast access to branch node (no bounds checking)
-    /// SAFETY: Caller must ensure id is valid and allocated
-    pub unsafe fn get_branch_unchecked(&self, id: NodeId) -> &crate::types::BranchNode<K, V> {
-        self.branch_arena.get_unchecked(id)
-    }
+    // Unsafe arena access methods moved to arena.rs module
 }
