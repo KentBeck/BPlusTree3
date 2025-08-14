@@ -3,7 +3,7 @@
 //! This module provides a B+ tree data structure with a dictionary-like interface,
 //! supporting efficient insertion, deletion, lookup, and range queries.
 
-use std::ops::{Bound, RangeBounds};
+// Range imports moved to range_queries.rs module
 
 // Import our new modules
 mod arena;
@@ -20,6 +20,8 @@ mod comprehensive_performance_benchmark;
 mod node;
 mod iteration;
 mod validation;
+mod tree_structure;
+mod range_queries;
 
 pub use arena::{Arena, ArenaStats, NodeId as ArenaNodeId, NULL_NODE as ARENA_NULL_NODE};
 pub use compact_arena::{CompactArena, CompactArenaStats};
@@ -30,7 +32,7 @@ pub use types::{BPlusTreeMap, NodeId, NodeRef, NULL_NODE, ROOT_NODE, LeafNode, B
 pub use construction::{InitResult as ConstructionResult};
 pub use iteration::{ItemIterator, FastItemIterator, KeyIterator, ValueIterator, RangeIterator};
 
-use std::marker::PhantomData;
+// PhantomData import moved to tree_structure.rs module
 
 // Internal type imports removed - no longer needed in main lib.rs
 
@@ -238,322 +240,15 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // OTHER API OPERATIONS
     // ============================================================================
 
-    /// Returns the number of elements in the tree.
-    pub fn len(&self) -> usize {
-        self.len_recursive(&self.root)
-    }
-
-    /// Recursively count elements with proper arena access.
-    fn len_recursive(&self, node: &NodeRef<K, V>) -> usize {
-        match node {
-            NodeRef::Leaf(id, _) => self.get_leaf(*id).map(|leaf| leaf.len()).unwrap_or(0),
-            NodeRef::Branch(id, _) => self
-                .get_branch(*id)
-                .map(|branch| {
-                    branch
-                        .children
-                        .iter()
-                        .map(|child| self.len_recursive(child))
-                        .sum()
-                })
-                .unwrap_or(0),
-        }
-    }
-
-    /// Returns true if the tree is empty.
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    /// Returns true if the root is a leaf node.
-    pub fn is_leaf_root(&self) -> bool {
-        matches!(self.root, NodeRef::Leaf(_, _))
-    }
-
-    /// Returns the number of leaf nodes in the tree.
-    pub fn leaf_count(&self) -> usize {
-        self.leaf_count_recursive(&self.root)
-    }
-
-    /// Recursively count leaf nodes with proper arena access.
-    fn leaf_count_recursive(&self, node: &NodeRef<K, V>) -> usize {
-        match node {
-            NodeRef::Leaf(_, _) => 1, // An arena leaf is one leaf node
-            NodeRef::Branch(id, _) => self
-                .get_branch(*id)
-                .map(|branch| {
-                    branch
-                        .children
-                        .iter()
-                        .map(|child| self.leaf_count_recursive(child))
-                        .sum()
-                })
-                .unwrap_or(0),
-        }
-    }
-
-    /// Clear all items from the tree.
-    pub fn clear(&mut self) {
-        // Clear all arenas and create a new root leaf
-        self.leaf_arena.clear();
-        self.branch_arena.clear();
-
-        // Create a new root leaf
-        let root_leaf = LeafNode::new(self.capacity);
-        let root_id = self.leaf_arena.allocate(root_leaf);
-        self.root = NodeRef::Leaf(root_id, PhantomData);
-    }
+    // Tree structure operations moved to tree_structure.rs module
 
     // Iterator methods moved to iteration.rs module
 
-    /// Returns an iterator over key-value pairs in a range using Rust's range syntax.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use bplustree::BPlusTreeMap;
-    ///
-    /// let mut tree = BPlusTreeMap::new(16).unwrap();
-    /// for i in 0..10 {
-    ///     tree.insert(i, format!("value{}", i));
-    /// }
-    ///
-    /// // Different range syntaxes
-    /// let range1: Vec<_> = tree.range(3..7).map(|(k, v)| (*k, v.clone())).collect();
-    /// assert_eq!(range1, vec![(3, "value3".to_string()), (4, "value4".to_string()),
-    ///                         (5, "value5".to_string()), (6, "value6".to_string())]);
-    ///
-    /// let range2: Vec<_> = tree.range(3..=7).map(|(k, v)| (*k, v.clone())).collect();
-    /// assert_eq!(range2, vec![(3, "value3".to_string()), (4, "value4".to_string()),
-    ///                         (5, "value5".to_string()), (6, "value6".to_string()),
-    ///                         (7, "value7".to_string())]);
-    ///
-    /// let range3: Vec<_> = tree.range(5..).map(|(k, v)| *k).collect();
-    /// assert_eq!(range3, vec![5, 6, 7, 8, 9]);
-    ///
-    /// let range4: Vec<_> = tree.range(..5).map(|(k, v)| *k).collect();
-    /// assert_eq!(range4, vec![0, 1, 2, 3, 4]);
-    ///
-    /// let range5: Vec<_> = tree.range(..).map(|(k, v)| *k).collect();
-    /// assert_eq!(range5, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    /// ```
-    pub fn range<R>(&self, range: R) -> RangeIterator<'_, K, V>
-    where
-        R: RangeBounds<K>,
-    {
-        let (start_info, skip_first, end_info) = self.resolve_range_bounds(range);
-        RangeIterator::new_with_skip_owned(self, start_info, skip_first, end_info)
-    }
+    // Range query operations moved to range_queries.rs module
 
-    /// Returns the first key-value pair in the tree.
-    pub fn first(&self) -> Option<(&K, &V)> {
-        self.items().next()
-    }
+    // Range query helper methods moved to range_queries.rs module
 
-    /// Returns the last key-value pair in the tree.
-    pub fn last(&self) -> Option<(&K, &V)> {
-        self.items().last()
-    }
-
-    // ============================================================================
-    // RANGE QUERY HELPERS
-    // ============================================================================
-
-    fn resolve_range_bounds<R>(
-        &self,
-        range: R,
-    ) -> (
-        Option<(NodeId, usize)>,
-        bool,
-        Option<(K, bool)>,
-    )
-    where
-        R: RangeBounds<K>,
-    {
-        // Optimize start bound resolution - eliminate redundant Option handling
-        let (start_info, skip_first) = match range.start_bound() {
-            Bound::Included(key) => (self.find_range_start(key), false),
-            Bound::Excluded(key) => (self.find_range_start(key), true),
-            Bound::Unbounded => (self.get_first_leaf_id().map(|id| (id, 0)), false),
-        };
-
-        // Avoid cloning end bound key when possible
-        let end_info = match range.end_bound() {
-            Bound::Included(key) => Some((key.clone(), true)),
-            Bound::Excluded(key) => Some((key.clone(), false)),
-            Bound::Unbounded => None,
-        };
-
-        (start_info, skip_first, end_info)
-    }
-
-    // ============================================================================
-    // RANGE QUERY OPTIMIZATION HELPERS
-    // ============================================================================
-
-    /// Find the leaf node and index where a range should start
-    fn find_range_start(&self, start_key: &K) -> Option<(NodeId, usize)> {
-        let mut current = &self.root;
-
-        // Navigate down to leaf level
-        loop {
-            match current {
-                NodeRef::Leaf(leaf_id, _) => {
-                    let leaf = self.get_leaf(*leaf_id)?;
-                    
-                    // Use binary search instead of linear search for better performance
-                    let index = match leaf.keys.binary_search(start_key) {
-                        Ok(exact_index) => exact_index,     // Found exact key
-                        Err(insert_index) => insert_index,  // First key >= start_key
-                    };
-
-                    if index < leaf.keys.len() {
-                        return Some((*leaf_id, index));
-                    } else if leaf.next != NULL_NODE {
-                        // All keys in this leaf are < start_key, try next leaf
-                        // Check if next leaf exists and has keys without redundant arena lookup
-                        return Some((leaf.next, 0));
-                    } else {
-                        // No more leaves
-                        return None;
-                    }
-                }
-                NodeRef::Branch(branch_id, _) => {
-                    let branch = self.get_branch(*branch_id)?;
-                    let child_index = branch.find_child_index(start_key);
-
-                    if child_index < branch.children.len() {
-                        current = &branch.children[child_index];
-                    } else {
-                        return None;
-                    }
-                }
-            }
-        }
-    }
-
-    /// Get the ID of the first (leftmost) leaf in the tree
-    fn get_first_leaf_id(&self) -> Option<NodeId> {
-        let mut current = &self.root;
-
-        loop {
-            match current {
-                NodeRef::Leaf(leaf_id, _) => return Some(*leaf_id),
-                NodeRef::Branch(branch_id, _) => {
-                    if let Some(branch) = self.get_branch(*branch_id) {
-                        if !branch.children.is_empty() {
-                            current = &branch.children[0];
-                        } else {
-                            return None;
-                        }
-                    } else {
-                        return None;
-                    }
-                }
-            }
-        }
-    }
-
-    // ============================================================================
-    // ENHANCED ARENA-BASED ALLOCATION FOR LEAF NODES
-    // ============================================================================
-
-    // allocate_leaf method moved to insert_operations.rs module
-
-    /// Deallocate a leaf node from the arena.
-    pub fn deallocate_leaf(&mut self, id: NodeId) -> Option<LeafNode<K, V>> {
-        self.leaf_arena.deallocate(id)
-    }
-
-    // Arena access methods moved to get_operations.rs module
-
-    /// Get the number of free leaf nodes in the arena.
-    pub fn free_leaf_count(&self) -> usize {
-        self.leaf_arena.free_count()
-    }
-
-    /// Get the number of allocated leaf nodes in the arena.
-    pub fn allocated_leaf_count(&self) -> usize {
-        self.leaf_arena.allocated_count()
-    }
-
-    /// Get the leaf arena utilization ratio.
-    pub fn leaf_utilization(&self) -> f64 {
-        self.leaf_arena.utilization()
-    }
-
-    // ============================================================================
-    // ARENA STATISTICS
-    // ============================================================================
-
-    /// Get statistics for the leaf node arena.
-    pub fn leaf_arena_stats(&self) -> CompactArenaStats {
-        self.leaf_arena.stats()
-    }
-
-    /// Get statistics for the branch node arena.
-    pub fn branch_arena_stats(&self) -> CompactArenaStats {
-        self.branch_arena.stats()
-    }
-
-    /// Set the next pointer of a leaf node in the arena.
-    pub fn set_leaf_next(&mut self, id: NodeId, next_id: NodeId) -> bool {
-        self.get_leaf_mut(id)
-            .map(|leaf| {
-                leaf.next = next_id;
-                true
-            })
-            .unwrap_or(false)
-    }
-
-    /// Get the next pointer of a leaf node in the arena.
-    // get_leaf_next method moved to get_operations.rs module
-
-    // ============================================================================
-    // CHILD LOOKUP HELPERS (Phase 2)
-    // ============================================================================
-
-    /// Find the child index and `NodeRef` for `key` in the specified branch,
-    /// returning `None` if the branch does not exist or index is out of range.
-    pub fn find_child(&self, branch_id: NodeId, key: &K) -> Option<(usize, NodeRef<K, V>)> {
-        self.get_branch(branch_id).and_then(|branch| {
-            let idx = branch.find_child_index(key);
-            branch.children.get(idx).cloned().map(|child| (idx, child))
-        })
-    }
-
-    /// Mutable version of `find_child`.
-    pub fn find_child_mut(&mut self, branch_id: NodeId, key: &K) -> Option<(usize, NodeRef<K, V>)> {
-        self.get_branch_mut(branch_id).and_then(|branch| {
-            let idx = branch.find_child_index(key);
-            branch.children.get(idx).cloned().map(|child| (idx, child))
-        })
-    }
-
-    // ============================================================================
-    // ENHANCED ARENA-BASED ALLOCATION FOR BRANCH NODES
-    // ============================================================================
-
-    // allocate_branch method moved to insert_operations.rs module
-
-    /// Deallocate a branch node from the arena.
-    pub fn deallocate_branch(&mut self, id: NodeId) -> Option<BranchNode<K, V>> {
-        self.branch_arena.deallocate(id)
-    }
-
-    // Branch arena access methods moved to get_operations.rs module
-
-    /// Unsafe fast access to leaf node (no bounds checking)
-    /// SAFETY: Caller must ensure id is valid and allocated
-    pub unsafe fn get_leaf_unchecked(&self, id: NodeId) -> &LeafNode<K, V> {
-        self.leaf_arena.get_unchecked(id)
-    }
-
-    /// Unsafe fast access to branch node (no bounds checking)
-    /// SAFETY: Caller must ensure id is valid and allocated
-    pub unsafe fn get_branch_unchecked(&self, id: NodeId) -> &BranchNode<K, V> {
-        self.branch_arena.get_unchecked(id)
-    }
+    // All arena management and tree structure methods moved to tree_structure.rs module
 
     
 
@@ -563,40 +258,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     // All validation and debugging methods moved to validation.rs module
 
-    /// Count the number of leaf and branch nodes actually in the tree structure.
-    pub fn count_nodes_in_tree(&self) -> (usize, usize) {
-        if matches!(self.root, NodeRef::Leaf(_, _)) {
-            // Single leaf root
-            (1, 0)
-        } else {
-            self.count_nodes_recursive(&self.root)
-        }
-    }
-
-    /// Recursively count nodes in the tree.
-    fn count_nodes_recursive(&self, node: &NodeRef<K, V>) -> (usize, usize) {
-        match node {
-            NodeRef::Leaf(_, _) => (1, 0), // Found a leaf
-            NodeRef::Branch(id, _) => {
-                if let Some(branch) = self.get_branch(*id) {
-                    let mut total_leaves = 0;
-                    let mut total_branches = 1; // Count this branch
-
-                    // Recursively count in all children
-                    for child in &branch.children {
-                        let (child_leaves, child_branches) = self.count_nodes_recursive(child);
-                        total_leaves += child_leaves;
-                        total_branches += child_branches;
-                    }
-
-                    (total_leaves, total_branches)
-                } else {
-                    // Invalid branch reference
-                    (0, 0)
-                }
-            }
-        }
-    }
+    // Tree structure counting methods moved to tree_structure.rs module
 
     // Validation helper methods moved to validation.rs module
 
