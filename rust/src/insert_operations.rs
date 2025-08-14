@@ -13,6 +13,11 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     pub fn allocate_leaf(&mut self, leaf: LeafNode<K, V>) -> NodeId {
         self.leaf_arena.allocate(leaf)
     }
+
+    /// Allocate a new branch node in the arena and return its ID.
+    pub fn allocate_branch(&mut self, branch: BranchNode<K, V>) -> NodeId {
+        self.branch_arena.allocate(branch)
+    }
 }
 
 #[cfg(test)]

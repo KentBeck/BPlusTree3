@@ -1475,10 +1475,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ENHANCED ARENA-BASED ALLOCATION FOR BRANCH NODES
     // ============================================================================
 
-    /// Allocate a new branch node in the arena and return its ID.
-    pub fn allocate_branch(&mut self, branch: BranchNode<K, V>) -> NodeId {
-        self.branch_arena.allocate(branch)
-    }
+    // allocate_branch method moved to insert_operations.rs module
 
     /// Deallocate a branch node from the arena.
     pub fn deallocate_branch(&mut self, id: NodeId) -> Option<BranchNode<K, V>> {
