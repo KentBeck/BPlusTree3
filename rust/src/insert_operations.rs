@@ -110,7 +110,76 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
-    // insert method will be moved here once all supporting methods are ready
+    /// Insert a key-value pair into the tree.
+    ///
+    /// If the key already exists, the old value is returned and replaced.
+    /// If the key is new, `None` is returned.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key to insert
+    /// * `value` - The value to associate with the key
+    ///
+    /// # Returns
+    ///
+    /// The previous value associated with the key, if any.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bplustree::BPlusTreeMap;
+    ///
+    /// let mut tree = BPlusTreeMap::new(16).unwrap();
+    /// assert_eq!(tree.insert(1, "first"), None);
+    /// assert_eq!(tree.insert(1, "second"), Some("first"));
+    /// ```
+    pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+        // Use insert_recursive to handle the insertion
+        let result = self.insert_recursive(&self.root.clone(), key, value);
+
+        match result {
+            InsertResult::Updated(old_value) => old_value,
+            InsertResult::Error(_error) => {
+                // Log the error but maintain API compatibility
+                // This should never happen with correct split logic
+                eprintln!("BPlusTree internal error during insert - data integrity violation");
+                None
+            }
+            InsertResult::Split {
+                old_value,
+                new_node_data,
+                separator_key,
+            } => {
+                // Root split - need to create a new root
+                let new_node_ref = match new_node_data {
+                    SplitNodeData::Leaf(new_leaf_data) => {
+                        let new_id = self.allocate_leaf(new_leaf_data);
+
+                        // Update linked list pointers for root leaf split
+                        if let Some(leaf) = matches!(&self.root, NodeRef::Leaf(_, _))
+                            .then(|| self.root.id())
+                            .and_then(|original_id| self.get_leaf_mut(original_id))
+                        {
+                            leaf.next = new_id;
+                        }
+
+                        NodeRef::Leaf(new_id, PhantomData)
+                    }
+                    SplitNodeData::Branch(new_branch_data) => {
+                        let new_id = self.allocate_branch(new_branch_data);
+                        NodeRef::Branch(new_id, PhantomData)
+                    }
+                };
+
+                // Create new root with the split nodes
+                let new_root = self.new_root(new_node_ref, separator_key);
+                let root_id = self.allocate_branch(new_root);
+                self.root = NodeRef::Branch(root_id, PhantomData);
+
+                old_value
+            }
+        }
+    }
 }
 
 #[cfg(test)]
