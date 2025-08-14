@@ -3,7 +3,6 @@
 //! This module provides a B+ tree data structure with a dictionary-like interface,
 //! supporting efficient insertion, deletion, lookup, and range queries.
 
-use std::marker::PhantomData;
 use std::ops::{Bound, RangeBounds};
 
 // Import our new modules
@@ -11,6 +10,8 @@ mod arena;
 mod compact_arena;
 mod error;
 mod macros;
+mod types;
+mod construction;
 mod detailed_iterator_analysis;
 mod comprehensive_performance_benchmark;
 
@@ -19,17 +20,17 @@ pub use compact_arena::{CompactArena, CompactArenaStats};
 pub use error::{
     BPlusTreeError, BTreeResult, BTreeResultExt, InitResult, KeyResult, ModifyResult,
 };
+pub use types::{BPlusTreeMap, NodeId, NodeRef, NULL_NODE, ROOT_NODE, LeafNode, BranchNode};
+pub use construction::{InitResult as ConstructionResult, validation};
+
+use std::marker::PhantomData;
+
 use error::TreeResult;
+use types::{
+    InsertResult, RemoveResult, SplitNodeData,
+};
 
-// Constants
-const MIN_CAPACITY: usize = 4;
 
-/// Node ID type for arena-based allocation
-pub type NodeId = u32;
-
-/// Special node ID constants
-pub const NULL_NODE: NodeId = u32::MAX;
-pub const ROOT_NODE: NodeId = 0;
 
 
 
@@ -104,155 +105,16 @@ mod leaf_caching_tests {
     }
 }
 
-/// B+ Tree implementation with Rust dict-like API.
-///
-/// A B+ tree is a self-balancing tree data structure that maintains sorted data
-/// and allows searches, sequential access, insertions, and deletions in O(log n).
-/// Unlike B trees, all values are stored in leaf nodes, making range queries
-/// and sequential access very efficient.
-///
-/// # Type Parameters
-///
-/// * `K` - Key type that must implement `Ord + Clone + Debug`
-/// * `V` - Value type that must implement `Clone + Debug`
-///
-/// # Examples
-///
-/// ```
-/// use bplustree::BPlusTreeMap;
-///
-/// let mut tree = BPlusTreeMap::new(16).unwrap();
-/// tree.insert(1, "one");
-/// tree.insert(2, "two");
-/// tree.insert(3, "three");
-///
-/// assert_eq!(tree.get(&2), Some(&"two"));
-/// assert_eq!(tree.len(), 3);
-///
-/// // Range queries
-/// let range: Vec<_> = tree.items_range(Some(&1), Some(&3)).collect();
-/// assert_eq!(range, [(&1, &"one"), (&2, &"two")]);
-/// ```
-///
-/// # Performance Characteristics
-///
-/// - **Insertion**: O(log n)
-/// - **Lookup**: O(log n)
-/// - **Deletion**: O(log n)
-/// - **Range queries**: O(log n + k) where k is the number of items in range
-/// - **Iteration**: O(n)
-///
-/// # Capacity Guidelines
-///
-/// - Minimum capacity: 4 (enforced)
-/// - Recommended capacity: 16-128 depending on use case
-/// - Higher capacity = fewer tree levels but larger nodes
-/// - Lower capacity = more tree levels but smaller nodes
-#[derive(Debug)]
-pub struct BPlusTreeMap<K, V> {
-    /// Maximum number of keys per node.
-    capacity: usize,
-    /// The root node of the tree.
-    root: NodeRef<K, V>,
 
-    // Compact arena-based allocation for better performance
-    /// Compact arena storage for leaf nodes (eliminates Option wrapper overhead).
-    leaf_arena: CompactArena<LeafNode<K, V>>,
-    /// Compact arena storage for branch nodes (eliminates Option wrapper overhead).
-    branch_arena: CompactArena<BranchNode<K, V>>,
-}
 
-/// Node reference that can be either a leaf or branch node
-#[derive(Debug, Clone)]
-pub enum NodeRef<K, V> {
-    Leaf(NodeId, PhantomData<(K, V)>),
-    Branch(NodeId, PhantomData<(K, V)>),
-}
 
-impl<K, V> NodeRef<K, V> {
-    /// Return the raw node ID.
-    pub fn id(&self) -> NodeId {
-        match *self {
-            NodeRef::Leaf(id, _) => id,
-            NodeRef::Branch(id, _) => id,
-        }
-    }
-
-    /// Returns true if this reference points to a leaf node.
-    pub fn is_leaf(&self) -> bool {
-        matches!(self, NodeRef::Leaf(_, _))
-    }
-}
-
-/// Node data that can be allocated in the arena after a split.
-pub enum SplitNodeData<K, V> {
-    Leaf(LeafNode<K, V>),
-    Branch(BranchNode<K, V>),
-}
-
-/// Result of an insertion operation on a node.
-pub enum InsertResult<K, V> {
-    /// Insertion completed without splitting. Contains the old value if key existed.
-    Updated(Option<V>),
-    /// Insertion caused a split with arena allocation needed.
-    Split {
-        old_value: Option<V>,
-        new_node_data: SplitNodeData<K, V>,
-        separator_key: K,
-    },
-    /// Internal error occurred during insertion.
-    Error(BPlusTreeError),
-}
-
-/// Result of a removal operation on a node.
-pub enum RemoveResult<V> {
-    /// Removal completed. Contains the removed value if key existed.
-    /// The bool indicates if this node is now underfull and needs rebalancing.
-    Updated(Option<V>, bool),
-}
 
 impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ============================================================================
     // CONSTRUCTION
     // ============================================================================
 
-    /// Create a B+ tree with specified node capacity.
-    ///
-    /// # Arguments
-    ///
-    /// * `capacity` - Maximum number of keys per node (minimum 4)
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(BPlusTreeMap)` if capacity is valid, `Err(BPlusTreeError)` otherwise.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use bplustree::BPlusTreeMap;
-    ///
-    /// let tree = BPlusTreeMap::<i32, String>::new(16).unwrap();
-    /// assert!(tree.is_empty());
-    /// ```
-    pub fn new(capacity: usize) -> InitResult<Self> {
-        if capacity < MIN_CAPACITY {
-            return Err(BPlusTreeError::invalid_capacity(capacity, MIN_CAPACITY));
-        }
-
-        // Initialize compact arena with the first leaf at id=0
-        let mut leaf_arena = CompactArena::new();
-        let root_id = leaf_arena.allocate(LeafNode::new(capacity));
-
-        // Initialize compact branch arena (starts empty)
-        let branch_arena = CompactArena::new();
-
-        Ok(Self {
-            capacity,
-            root: NodeRef::Leaf(root_id, PhantomData),
-            leaf_arena,
-            branch_arena,
-        })
-    }
+    // Construction methods moved to construction.rs module
 
     // ============================================================================
     // GET OPERATIONS
@@ -2127,51 +1989,16 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 }
 
-impl<K: Ord + Clone, V: Clone> Default for BPlusTreeMap<K, V> {
-    /// Create a B+ tree with default capacity (16).
-    fn default() -> Self {
-        Self::new(16).expect("Default capacity should be valid")
-    }
-}
+// Default implementation moved to construction.rs module
 
-/// Leaf node containing key-value pairs.
-#[derive(Debug, Clone)]
-pub struct LeafNode<K, V> {
-    /// Maximum number of keys this node can hold.
-    capacity: usize,
-    /// Sorted list of keys.
-    keys: Vec<K>,
-    /// List of values corresponding to keys.
-    values: Vec<V>,
-    /// Next leaf node in the linked list (for range queries).
-    next: NodeId,
-}
 
-/// Internal (branch) node containing keys and child pointers.
-#[derive(Debug, Clone)]
-pub struct BranchNode<K, V> {
-    /// Maximum number of keys this node can hold.
-    capacity: usize,
-    /// Sorted list of separator keys.
-    keys: Vec<K>,
-    /// List of child nodes (leaves or other branches).
-    children: Vec<NodeRef<K, V>>,
-}
 
 impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     // ============================================================================
     // CONSTRUCTION
     // ============================================================================
 
-    /// Creates a new leaf node with the specified capacity.
-    pub fn new(capacity: usize) -> Self {
-        Self {
-            capacity,
-            keys: Vec::new(),
-            values: Vec::new(),
-            next: NULL_NODE,
-        }
-    }
+    // Construction methods moved to construction.rs module
 
     /// Get a reference to the keys in this leaf node.
     pub fn keys(&self) -> &Vec<K> {
@@ -2429,30 +2256,14 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     }
 }
 
-impl<K, V> Default for LeafNode<K, V> {
-    fn default() -> Self {
-        Self {
-            capacity: 0,
-            keys: Vec::new(),
-            values: Vec::new(),
-            next: NULL_NODE,
-        }
-    }
-}
+// Default implementation moved to construction.rs module
 
 impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     // ============================================================================
     // CONSTRUCTION
     // ============================================================================
 
-    /// Creates a new branch node with the specified capacity.
-    pub fn new(capacity: usize) -> Self {
-        Self {
-            capacity,
-            keys: Vec::new(),
-            children: Vec::new(),
-        }
-    }
+    // Construction methods moved to construction.rs module
 
     // ============================================================================
     // GET OPERATIONS
@@ -2667,15 +2478,7 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     }
 }
 
-impl<K, V> Default for BranchNode<K, V> {
-    fn default() -> Self {
-        Self {
-            capacity: 0,
-            keys: Vec::new(),
-            children: Vec::new(),
-        }
-    }
-}
+// Default implementation moved to construction.rs module
 
 /// Iterator over key-value pairs in the B+ tree using the leaf linked list.
 pub struct ItemIterator<'a, K, V> {

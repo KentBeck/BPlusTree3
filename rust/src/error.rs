@@ -62,6 +62,16 @@ impl BPlusTreeError {
     pub fn allocation_error(resource: &str, reason: &str) -> Self {
         Self::AllocationError(format!("Failed to allocate {}: {}", resource, reason))
     }
+
+    /// Check if this error is a capacity error
+    pub fn is_capacity_error(&self) -> bool {
+        matches!(self, Self::InvalidCapacity(_))
+    }
+
+    /// Check if this error is an arena error
+    pub fn is_arena_error(&self) -> bool {
+        matches!(self, Self::ArenaError(_))
+    }
 }
 
 impl std::fmt::Display for BPlusTreeError {
