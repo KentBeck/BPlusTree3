@@ -842,59 +842,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         true // Child still exists
     }
 
-    /// Collapse the root if it's a branch with only one child or no children.
-    fn collapse_root_if_needed(&mut self) {
-        loop {
-            // Capture root ID first to avoid borrowing conflicts
-            let root_branch_id = match &self.root {
-                NodeRef::Branch(id, _) => Some(*id),
-                NodeRef::Leaf(_, _) => None,
-            };
-
-            // Use Option combinators for cleaner nested logic handling
-            let branch_info = root_branch_id.and_then(|branch_id| {
-                self.get_branch(branch_id).map(|branch| {
-                    (
-                        branch_id,
-                        branch.children.len(),
-                        branch.children.first().cloned(),
-                    )
-                })
-            });
-
-            match branch_info {
-                Some((branch_id, 0, _)) => {
-                    // Empty branch - replace with empty leaf
-                    self.create_empty_root_leaf();
-                    self.deallocate_branch(branch_id);
-                    break;
-                }
-                Some((branch_id, 1, Some(child))) => {
-                    // Single child - promote it and continue collapsing
-                    self.root = child;
-                    self.deallocate_branch(branch_id);
-                    // Continue loop in case new root also needs collapsing
-                }
-                Some((_, _, _)) => {
-                    // Multiple children - no collapse needed
-                    break;
-                }
-                None => {
-                    // Handle missing branch or already leaf root
-                    root_branch_id
-                        .filter(|_| true) // Branch ID exists but branch is missing
-                        .map(|_| self.create_empty_root_leaf());
-                    break;
-                }
-            }
-        }
-    }
-
-    /// Helper method to create empty root leaf
-    fn create_empty_root_leaf(&mut self) {
-        let empty_id = self.allocate_leaf(LeafNode::new(self.capacity));
-        self.root = NodeRef::Leaf(empty_id, PhantomData);
-    }
+    // collapse_root_if_needed and create_empty_root_leaf methods moved to delete_operations.rs module
 
     // ============================================================================
     // OTHER API OPERATIONS
