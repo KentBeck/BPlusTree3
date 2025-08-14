@@ -6,7 +6,7 @@
 // Range imports moved to range_queries.rs module
 
 // Import our new modules
-mod arena;
+// arena.rs removed - only compact_arena.rs is used
 mod compact_arena;
 mod error;
 mod macros;
@@ -23,7 +23,7 @@ mod validation;
 mod tree_structure;
 mod range_queries;
 
-pub use arena::{Arena, ArenaStats, NodeId as ArenaNodeId, NULL_NODE as ARENA_NULL_NODE};
+// Generic Arena removed - only CompactArena is used in the implementation
 pub use compact_arena::{CompactArena, CompactArenaStats};
 pub use error::{
     BPlusTreeError, BTreeResult, BTreeResultExt, InitResult, KeyResult, ModifyResult,
