@@ -262,21 +262,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // HELPERS FOR INSERT OPERATIONS
     // ============================================================================
 
-    /// New roots are the only BranchNodes allowed to remain underfull
-    fn new_root(&mut self, new_node: NodeRef<K, V>, separator_key: K) -> BranchNode<K, V> {
-        let mut new_root = BranchNode::new(self.capacity);
-        new_root.keys.push(separator_key);
-
-        // Move the current root to be the left child
-        // Use a dummy NodeRef with NULL_NODE to avoid arena allocation
-        let dummy = NodeRef::Leaf(NULL_NODE, PhantomData);
-        let old_root = std::mem::replace(&mut self.root, dummy);
-
-        new_root.children.push(old_root);
-        new_root.children.push(new_node);
-
-        new_root
-    }
+    // new_root method moved to insert_operations.rs module
 
     /// Recursively insert a key with proper arena access.
     fn insert_recursive(&mut self, node: &NodeRef<K, V>, key: K, value: V) -> InsertResult<K, V> {

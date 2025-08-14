@@ -18,6 +18,23 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     pub fn allocate_branch(&mut self, branch: BranchNode<K, V>) -> NodeId {
         self.branch_arena.allocate(branch)
     }
+
+    /// Create a new root node when the current root splits.
+    /// New roots are the only BranchNodes allowed to remain underfull.
+    pub fn new_root(&mut self, new_node: NodeRef<K, V>, separator_key: K) -> BranchNode<K, V> {
+        let mut new_root = BranchNode::new(self.capacity);
+        new_root.keys.push(separator_key);
+
+        // Move the current root to be the left child
+        // Use a dummy NodeRef with NULL_NODE to avoid arena allocation
+        let dummy = NodeRef::Leaf(crate::types::NULL_NODE, PhantomData);
+        let old_root = std::mem::replace(&mut self.root, dummy);
+
+        new_root.children.push(old_root);
+        new_root.children.push(new_node);
+
+        new_root
+    }
 }
 
 #[cfg(test)]
