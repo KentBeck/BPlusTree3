@@ -12,6 +12,7 @@ mod error;
 mod macros;
 mod types;
 mod construction;
+mod get_operations;
 mod detailed_iterator_analysis;
 mod comprehensive_performance_benchmark;
 
@@ -136,72 +137,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// use bplustree::BPlusTreeMap;
     ///
     /// let mut tree = BPlusTreeMap::new(16).unwrap();
-    /// tree.insert(1, "one");
-    /// assert_eq!(tree.get(&1), Some(&"one"));
-    /// assert_eq!(tree.get(&2), None);
-    /// ```
-    pub fn get(&self, key: &K) -> Option<&V> {
-        let node = &self.root;
-        self.get_recursive(node, key)
-    }
-
-    /// Check if key exists in the tree.
-    pub fn contains_key(&self, key: &K) -> bool {
-        self.get(key).is_some()
-    }
-
-    /// Get value for a key with default.
-    pub fn get_or_default<'a>(&'a self, key: &K, default: &'a V) -> &'a V {
-        self.get(key).unwrap_or(default)
-    }
-
-    /// Get value for a key, returning an error if the key doesn't exist.
-    /// This is equivalent to Python's `tree[key]`.
-    pub fn get_item(&self, key: &K) -> KeyResult<&V> {
-        self.get(key).ok_or(BPlusTreeError::KeyNotFound)
-    }
-
-    /// Get a mutable reference to the value for a key.
-    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        let root = self.root.clone();
-        self.get_mut_recursive(&root, key)
-    }
-
-    // ============================================================================
-    // HELPERS FOR GET OPERATIONS
-    // ============================================================================
-
-    fn get_recursive<'a>(&'a self, node: &'a NodeRef<K, V>, key: &K) -> Option<&'a V> {
-        match node {
-            NodeRef::Leaf(id, _) => self.get_leaf(*id).and_then(|leaf| leaf.get(key)),
-            NodeRef::Branch(id, _) => self
-                .get_branch(*id)
-                .and_then(|branch| branch.get_child(key))
-                .and_then(|child| self.get_recursive(child, key)),
-        }
-    }
-
-    /// Get mutable reference recursively
-    fn get_mut_recursive(&mut self, node: &NodeRef<K, V>, key: &K) -> Option<&mut V> {
-        match node {
-            NodeRef::Leaf(id, _) => self.get_leaf_mut(*id).and_then(|leaf| leaf.get_mut(key)),
-            NodeRef::Branch(id, _) => {
-                let (_child_index, child_ref) = self.get_child_for_key(*id, key)?;
-                self.get_mut_recursive(&child_ref, key)
-            }
-        }
-    }
-
-    /// Helper to get child info for a key in a branch
-    fn get_child_for_key(&self, branch_id: NodeId, key: &K) -> Option<(usize, NodeRef<K, V>)> {
-        let branch = self.get_branch(branch_id)?;
-        let child_index = branch.find_child_index(key);
-        branch
-            .children
-            .get(child_index)
-            .cloned()
-            .map(|child| (child_index, child))
-    }
+    // GET operations moved to get_operations.rs module
 
     /// Helper to check if a node is underfull
     fn is_node_underfull(&self, node_ref: &NodeRef<K, V>) -> bool {
@@ -479,13 +415,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.remove(key).ok_or(BPlusTreeError::KeyNotFound)
     }
 
-    /// Try to get a value, returning detailed error context on failure
-    pub fn try_get(&self, key: &K) -> KeyResult<&V> {
-        use crate::error::BTreeResultExt;
-        self.get(key)
-            .ok_or(BPlusTreeError::KeyNotFound)
-            .with_context("Key lookup operation")
-    }
+    // try_get method moved to get_operations.rs module
 
     /// Insert with comprehensive error handling and rollback on failure
     pub fn try_insert(&mut self, key: K, value: V) -> ModifyResult<Option<V>>
@@ -553,21 +483,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         Ok(results)
     }
 
-    /// Get multiple keys with detailed error reporting
-    pub fn get_many(&self, keys: &[K]) -> BTreeResult<Vec<&V>> {
-        let mut values = Vec::new();
-
-        for (_index, key) in keys.iter().enumerate() {
-            match self.get(key) {
-                Some(value) => values.push(value),
-                None => {
-                    return Err(BPlusTreeError::KeyNotFound);
-                }
-            }
-        }
-
-        Ok(values)
-    }
+    // get_many method moved to get_operations.rs module
 
     /// Check if tree is in a valid state for operations
     pub fn validate_for_operation(&self, operation: &str) -> BTreeResult<()> {
@@ -1502,15 +1418,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.leaf_arena.deallocate(id)
     }
 
-    /// Get a reference to a leaf node in the arena.
-    pub fn get_leaf(&self, id: NodeId) -> Option<&LeafNode<K, V>> {
-        self.leaf_arena.get(id)
-    }
-
-    /// Get a mutable reference to a leaf node in the arena.
-    pub fn get_leaf_mut(&mut self, id: NodeId) -> Option<&mut LeafNode<K, V>> {
-        self.leaf_arena.get_mut(id)
-    }
+    // Arena access methods moved to get_operations.rs module
 
     /// Get the number of free leaf nodes in the arena.
     pub fn free_leaf_count(&self) -> usize {
@@ -1552,15 +1460,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Get the next pointer of a leaf node in the arena.
-    pub fn get_leaf_next(&self, id: NodeId) -> Option<NodeId> {
-        self.get_leaf(id).and_then(|leaf| {
-            if leaf.next == NULL_NODE {
-                None
-            } else {
-                Some(leaf.next)
-            }
-        })
-    }
+    // get_leaf_next method moved to get_operations.rs module
 
     // ============================================================================
     // CHILD LOOKUP HELPERS (Phase 2)
@@ -1597,15 +1497,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.branch_arena.deallocate(id)
     }
 
-    /// Get a reference to a branch node in the arena.
-    pub fn get_branch(&self, id: NodeId) -> Option<&BranchNode<K, V>> {
-        self.branch_arena.get(id)
-    }
-
-    /// Get a mutable reference to a branch node in the arena.
-    pub fn get_branch_mut(&mut self, id: NodeId) -> Option<&mut BranchNode<K, V>> {
-        self.branch_arena.get_mut(id)
-    }
+    // Branch arena access methods moved to get_operations.rs module
 
     /// Unsafe fast access to leaf node (no bounds checking)
     /// SAFETY: Caller must ensure id is valid and allocated
@@ -2019,26 +1911,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     // GET OPERATIONS
     // ============================================================================
 
-    /// Get value for a key from this leaf node.
-    pub fn get(&self, key: &K) -> Option<&V> {
-        match self.keys.binary_search(key) {
-            Ok(index) => Some(&self.values[index]),
-            Err(_) => None,
-        }
-    }
-
-    /// Get a mutable reference to the value for a key from this leaf node.
-    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        match self.keys.binary_search(key) {
-            Ok(index) => Some(&mut self.values[index]),
-            Err(_) => None,
-        }
-    }
-
-    // ============================================================================
-    // HELPERS FOR GET OPERATIONS
-    // ============================================================================
-    // (No additional helpers needed for LeafNode get operations)
+    // GET operations moved to get_operations.rs module
 
     // ============================================================================
     // INSERT OPERATIONS
@@ -2269,37 +2142,7 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     // GET OPERATIONS
     // ============================================================================
 
-    /// Get the child node for a given key.
-    pub fn get_child(&self, key: &K) -> Option<&NodeRef<K, V>> {
-        let child_index = self.find_child_index(key);
-        if child_index < self.children.len() {
-            Some(&self.children[child_index])
-        } else {
-            None
-        }
-    }
-
-    /// Get a mutable reference to the child node for a given key.
-    pub fn get_child_mut(&mut self, key: &K) -> Option<&mut NodeRef<K, V>> {
-        let child_index = self.find_child_index(key);
-        if child_index >= self.children.len() {
-            return None; // Invalid child index
-        }
-        Some(&mut self.children[child_index])
-    }
-
-    // ============================================================================
-    // HELPERS FOR GET OPERATIONS
-    // ============================================================================
-
-    /// Find the child index where the given key should be located.
-    pub fn find_child_index(&self, key: &K) -> usize {
-        // Binary search to find the appropriate child
-        match self.keys.binary_search(key) {
-            Ok(index) => index + 1, // Key found, go to right child
-            Err(index) => index,    // Key not found, insert position is the child index
-        }
-    }
+    // GET operations moved to get_operations.rs module
 
     // ============================================================================
     // INSERT OPERATIONS
