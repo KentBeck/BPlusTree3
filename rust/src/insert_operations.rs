@@ -36,6 +36,80 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         new_root
     }
 
+    /// Recursively insert a key with proper arena access.
+    pub fn insert_recursive(&mut self, node: &NodeRef<K, V>, key: K, value: V) -> InsertResult<K, V> {
+        match node {
+            NodeRef::Leaf(id, _) => self
+                .get_leaf_mut(*id)
+                .map_or(InsertResult::Updated(None), |leaf| leaf.insert(key, value)),
+            NodeRef::Branch(id, _) => {
+                let id = *id;
+
+                // First get child info without mutable borrow
+                let (child_index, child_ref) = match self.get_child_for_key(id, &key) {
+                    Some(info) => info,
+                    None => return InsertResult::Updated(None),
+                };
+
+                // Recursively insert
+                let child_result = self.insert_recursive(&child_ref, key, value);
+
+                // Handle the result
+                match child_result {
+                    InsertResult::Updated(old_value) => InsertResult::Updated(old_value),
+                    InsertResult::Error(error) => InsertResult::Error(error),
+                    InsertResult::Split {
+                        old_value,
+                        new_node_data,
+                        separator_key,
+                    } => {
+                        // Allocate the new node based on its type
+                        let new_node = match new_node_data {
+                            SplitNodeData::Leaf(new_leaf_data) => {
+                                let new_id = self.allocate_leaf(new_leaf_data);
+
+                                // Update linked list pointers for leaf splits
+                                // Update linked list pointers for leaf splits using Option combinators
+                                if let NodeRef::Leaf(original_id, _) = child_ref {
+                                    self.get_leaf_mut(original_id)
+                                        .map(|original_leaf| original_leaf.next = new_id);
+                                }
+
+                                NodeRef::Leaf(new_id, PhantomData)
+                            }
+                            SplitNodeData::Branch(new_branch_data) => {
+                                let new_id = self.allocate_branch(new_branch_data);
+                                NodeRef::Branch(new_id, PhantomData)
+                            }
+                        };
+
+                        // Insert into this branch
+                        match self.get_branch_mut(id).and_then(|branch| {
+                            branch.insert_child_and_split_if_needed(
+                                child_index,
+                                separator_key,
+                                new_node,
+                            )
+                        }) {
+                            Some((new_branch_data, promoted_key)) => {
+                                // This branch split too - return raw branch data
+                                InsertResult::Split {
+                                    old_value,
+                                    new_node_data: SplitNodeData::Branch(new_branch_data),
+                                    separator_key: promoted_key,
+                                }
+                            }
+                            None => {
+                                // No split needed or branch not found
+                                InsertResult::Updated(old_value)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // insert method will be moved here once all supporting methods are ready
 }
 
