@@ -35,6 +35,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
         new_root
     }
+
+    // insert method will be moved here once all supporting methods are ready
 }
 
 #[cfg(test)]
