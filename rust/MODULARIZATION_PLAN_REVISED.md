@@ -17,11 +17,11 @@ The current `lib.rs` is now 1,732 lines (down from 3,138 lines). Significant pro
 - `compact_arena.rs` - Compact arena implementation ✅
 - `node.rs` - Node implementations (LeafNode and BranchNode methods) ✅
 - `iteration.rs` - Iterator implementations (ItemIterator, FastItemIterator, etc.) ✅
+- `validation.rs` - Validation and debugging utilities ✅
 
 ### 🔄 PARTIALLY COMPLETED:
 - Range query operations (still in lib.rs)
 - Tree structure management (partially in lib.rs)
-- Validation and debugging (partially in lib.rs)
 
 ### ❌ REMAINING WORK:
 - Fix minor compilation issues in `iteration.rs`
@@ -31,11 +31,12 @@ The current `lib.rs` is now 1,732 lines (down from 3,138 lines). Significant pro
 - Clean up lib.rs to be just public API
 
 ### 📊 PROGRESS METRICS:
-- **lib.rs size reduced**: 1,732 → 948 lines (784 lines removed, 45% reduction)
+- **lib.rs size reduced**: 1,732 → 626 lines (1,106 lines removed, 64% reduction)
 - **Node implementations extracted**: ~400 lines moved to `node.rs` ✅
 - **Iterator implementations extracted**: ~354 lines moved to `iteration.rs` ✅
-- **Modules created**: 10 operational modules
-- **Estimated remaining**: ~800 lines to extract from lib.rs
+- **Validation implementations extracted**: ~322 lines moved to `validation.rs` ✅
+- **Modules created**: 11 operational modules
+- **Estimated remaining**: ~476 lines to extract from lib.rs
 
 ## Current Structure Analysis
 
@@ -568,5 +569,11 @@ This operation-based approach will make the codebase much more maintainable by e
 - **New module created:** `iteration.rs` with ItemIterator, FastItemIterator, KeyIterator, ValueIterator, RangeIterator
 - **Compilation status:** Minor lifetime issues to resolve (code extracted successfully)
 - **Achievement:** Additional 27% reduction in lib.rs size (45% total reduction)
+
+### ✅ COMPLETED: Validation Extraction
+- **Successfully extracted:** All validation and debugging methods (~322 lines)
+- **New module created:** `validation.rs` with check_invariants, validate, print_node_chain, slice, leaf_sizes
+- **Compilation status:** Working (minor import conflicts resolved)
+- **Achievement:** Additional 34% reduction in lib.rs size (64% total reduction)
 
 This will complete the modularization and achieve the goal of having no single module over 600 lines while maintaining clear operational boundaries.

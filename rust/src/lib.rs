@@ -19,6 +19,7 @@ mod detailed_iterator_analysis;
 mod comprehensive_performance_benchmark;
 mod node;
 mod iteration;
+mod validation;
 
 pub use arena::{Arena, ArenaStats, NodeId as ArenaNodeId, NULL_NODE as ARENA_NULL_NODE};
 pub use compact_arena::{CompactArena, CompactArenaStats};
@@ -26,7 +27,7 @@ pub use error::{
     BPlusTreeError, BTreeResult, BTreeResultExt, InitResult, KeyResult, ModifyResult,
 };
 pub use types::{BPlusTreeMap, NodeId, NodeRef, NULL_NODE, ROOT_NODE, LeafNode, BranchNode};
-pub use construction::{InitResult as ConstructionResult, validation};
+pub use construction::{InitResult as ConstructionResult};
 pub use iteration::{ItemIterator, FastItemIterator, KeyIterator, ValueIterator, RangeIterator};
 
 use std::marker::PhantomData;
@@ -226,12 +227,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     // get_many method moved to get_operations.rs module
 
-    /// Check if tree is in a valid state for operations
-    pub fn validate_for_operation(&self, operation: &str) -> BTreeResult<()> {
-        self.check_invariants_detailed().map_err(|e| {
-            BPlusTreeError::DataIntegrityError(format!("Validation for {}: {}", operation, e))
-        })
-    }
+    // Validation methods moved to validation.rs module
 
     // ============================================================================
     // HELPERS FOR DELETE OPERATIONS
@@ -565,91 +561,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     
 
     // ============================================================================
-    // OTHER HELPERS (TEST HELPERS)
+    // VALIDATION AND DEBUGGING METHODS
     // ============================================================================
 
-    /// Check if the tree maintains B+ tree invariants.
-    /// Returns true if all invariants are satisfied.
-    pub fn check_invariants(&self) -> bool {
-        self.check_node_invariants(&self.root, None, None, true)
-    }
-
-    /// Check invariants with detailed error reporting.
-    pub fn check_invariants_detailed(&self) -> Result<(), String> {
-        // First check the tree structure invariants
-        if !self.check_node_invariants(&self.root, None, None, true) {
-            return Err("Tree invariants violated".to_string());
-        }
-
-        // Then check the linked list invariants
-        self.check_linked_list_invariants()?;
-
-        // Finally check arena-tree consistency
-        self.check_arena_tree_consistency()
-            .map_err(|e| e.to_string())?;
-        Ok(())
-    }
-
-    /// Check that arena allocation matches tree structure
-    fn check_arena_tree_consistency(&self) -> TreeResult<()> {
-        // Count nodes in the tree structure
-        let (tree_leaf_count, tree_branch_count) = self.count_nodes_in_tree();
-
-        // Get arena counts
-        let leaf_stats = self.leaf_arena_stats();
-        let branch_stats = self.branch_arena_stats();
-
-        // Check leaf node consistency
-        if tree_leaf_count != leaf_stats.allocated_count {
-            return Err(BPlusTreeError::arena_error(
-                "Leaf consistency check",
-                &format!(
-                    "{} in tree vs {} in arena",
-                    tree_leaf_count, leaf_stats.allocated_count
-                ),
-            ));
-        }
-
-        // Check branch node consistency
-        if tree_branch_count != branch_stats.allocated_count {
-            return Err(BPlusTreeError::arena_error(
-                "Branch consistency check",
-                &format!(
-                    "{} in tree vs {} in arena",
-                    tree_branch_count, branch_stats.allocated_count
-                ),
-            ));
-        }
-
-        // Check that all leaf nodes in tree are reachable via linked list
-        self.check_leaf_linked_list_completeness()?;
-
-        Ok(())
-    }
-
-    /// Check that the leaf linked list is properly ordered and complete.
-    fn check_linked_list_invariants(&self) -> Result<(), String> {
-        // Use the iterator to get all keys
-        let keys: Vec<&K> = self.keys().collect();
-
-        // Check that keys are sorted
-        for i in 1..keys.len() {
-            if keys[i - 1] >= keys[i] {
-                return Err(format!("Iterator returned unsorted keys at index {}", i));
-            }
-        }
-
-        // Verify we got the right number of keys
-        if keys.len() != self.len() {
-            return Err(format!(
-                "Iterator returned {} keys but tree has {} items",
-                keys.len(),
-                self.len()
-            ));
-        }
-
-        Ok(())
-    }
+    // All validation and debugging methods moved to validation.rs module
 
     /// Count the number of leaf and branch nodes actually in the tree structure.
     pub fn count_nodes_in_tree(&self) -> (usize, usize) {
@@ -686,250 +601,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
-    /// Check that all leaf nodes in the tree are reachable via the linked list.
-    fn check_leaf_linked_list_completeness(&self) -> TreeResult<()> {
-        // Collect all leaf IDs from the tree structure
-        let mut tree_leaf_ids = Vec::new();
-        self.collect_leaf_ids(&self.root, &mut tree_leaf_ids);
-        tree_leaf_ids.sort();
+    // Validation helper methods moved to validation.rs module
 
-        // Collect all leaf IDs from the linked list traversal
-        let mut linked_list_ids = Vec::new();
-        if let Some(first_id) = self.get_first_leaf_id() {
-            let mut current_id = Some(first_id);
-            while let Some(id) = current_id {
-                linked_list_ids.push(id);
-                current_id = self.get_leaf(id).and_then(|leaf| {
-                    if leaf.next == crate::NULL_NODE {
-                        None
-                    } else {
-                        Some(leaf.next)
-                    }
-                });
-            }
-        }
-        linked_list_ids.sort();
+    // Debugging and testing utility methods moved to validation.rs module
 
-        // Compare the two lists
-        if tree_leaf_ids != linked_list_ids {
-            return Err(BPlusTreeError::corrupted_tree(
-                "Linked list",
-                &format!(
-                    "tree has {:?}, linked list has {:?}",
-                    tree_leaf_ids, linked_list_ids
-                ),
-            ));
-        }
+    // Validation implementation methods moved to validation.rs module
 
-        Ok(())
-    }
-
-    /// Collect all leaf node IDs from the tree structure.
-    fn collect_leaf_ids(&self, node: &NodeRef<K, V>, ids: &mut Vec<NodeId>) {
-        match node {
-            NodeRef::Leaf(id, _) => ids.push(*id),
-            NodeRef::Branch(id, _) => {
-                if let Some(branch) = self.get_branch(*id) {
-                    for child in &branch.children {
-                        self.collect_leaf_ids(child, ids);
-                    }
-                }
-            }
-        }
-    }
-
-    /// Alias for check_invariants_detailed (for test compatibility).
-    pub fn validate(&self) -> Result<(), String> {
-        self.check_invariants_detailed()
-    }
-
-    /// Returns all key-value pairs as a vector (for testing/debugging).
-    pub fn slice(&self) -> Vec<(&K, &V)> {
-        self.items().collect()
-    }
-
-    /// Returns the sizes of all leaf nodes (for testing/debugging).
-    pub fn leaf_sizes(&self) -> Vec<usize> {
-        let mut sizes = Vec::new();
-        self.collect_leaf_sizes(&self.root, &mut sizes);
-        sizes
-    }
-
-    /// Prints the node chain for debugging.
-    pub fn print_node_chain(&self) {
-        println!("Tree structure:");
-        self.print_node(&self.root, 0);
-    }
-
-    fn collect_leaf_sizes(&self, node: &NodeRef<K, V>, sizes: &mut Vec<usize>) {
-        match node {
-            NodeRef::Leaf(id, _) => {
-                let size = self.get_leaf(*id).map(|leaf| leaf.keys.len()).unwrap_or(0);
-                sizes.push(size);
-            }
-            NodeRef::Branch(id, _) => {
-                if let Some(branch) = self.get_branch(*id) {
-                    for child in &branch.children {
-                        self.collect_leaf_sizes(child, sizes);
-                    }
-                }
-                // Missing arena branch contributes no leaf sizes (do nothing)
-            }
-        }
-    }
-
-    fn print_node(&self, node: &NodeRef<K, V>, depth: usize) {
-        let indent = "  ".repeat(depth);
-        match node {
-            NodeRef::Leaf(id, _) => {
-                if let Some(leaf) = self.get_leaf(*id) {
-                    println!(
-                        "{}Leaf[id={}, cap={}]: {} keys",
-                        indent,
-                        id,
-                        leaf.capacity,
-                        leaf.keys.len()
-                    );
-                } else {
-                    println!("{}Leaf[id={}]: <missing>", indent, id);
-                }
-            }
-            NodeRef::Branch(id, _) => {
-                if let Some(branch) = self.get_branch(*id) {
-                    println!(
-                        "{}Branch[id={}, cap={}]: {} keys, {} children",
-                        indent,
-                        id,
-                        branch.capacity,
-                        branch.keys.len(),
-                        branch.children.len()
-                    );
-                    for child in &branch.children {
-                        self.print_node(child, depth + 1);
-                    }
-                } else {
-                    println!("{}Branch[id={}]: <missing>", indent, id);
-                }
-            }
-        }
-    }
-
-    /// Recursively check invariants for a node and its children.
-    fn check_node_invariants(
-        &self,
-        node: &NodeRef<K, V>,
-        min_key: Option<&K>,
-        max_key: Option<&K>,
-        _is_root: bool,
-    ) -> bool {
-        match node {
-            NodeRef::Leaf(id, _) => {
-                if let Some(leaf) = self.get_leaf(*id) {
-                    // Check leaf invariants
-                    if leaf.keys.len() != leaf.values.len() {
-                        return false; // Keys and values must have same length
-                    }
-
-                    // Check that keys are sorted
-                    for i in 1..leaf.keys.len() {
-                        if leaf.keys[i - 1] >= leaf.keys[i] {
-                            return false; // Keys must be in ascending order
-                        }
-                    }
-
-                    // Check capacity constraints
-                    if leaf.keys.len() > self.capacity {
-                        return false; // Node exceeds capacity
-                    }
-
-                    // Check minimum occupancy
-                    if !leaf.keys.is_empty() && leaf.is_underfull() {
-                        // For root nodes, allow fewer keys only if it's the only node
-                        if _is_root {
-                            // Root leaf can have any number of keys >= 1
-                            // (This is fine for leaf roots)
-                        } else {
-                            return false; // Non-root leaf is underfull
-                        }
-                    }
-
-                    // Check key bounds
-                    if let Some(min) = min_key {
-                        if !leaf.keys.is_empty() && &leaf.keys[0] < min {
-                            return false; // First key must be >= min_key
-                        }
-                    }
-                    if let Some(max) = max_key {
-                        if !leaf.keys.is_empty() && &leaf.keys[leaf.keys.len() - 1] >= max {
-                            return false; // Last key must be < max_key
-                        }
-                    }
-
-                    true
-                } else {
-                    false // Missing arena leaf is invalid
-                }
-            }
-            NodeRef::Branch(id, _) => {
-                if let Some(branch) = self.get_branch(*id) {
-                    // Check branch invariants
-                    if branch.keys.len() + 1 != branch.children.len() {
-                        return false; // Must have one more child than keys
-                    }
-
-                    // Check that keys are sorted
-                    for i in 1..branch.keys.len() {
-                        if branch.keys[i - 1] >= branch.keys[i] {
-                            return false; // Keys must be in ascending order
-                        }
-                    }
-
-                    // Check capacity constraints
-                    if branch.keys.len() > self.capacity {
-                        return false; // Node exceeds capacity
-                    }
-
-                    // Check minimum occupancy
-                    if !branch.keys.is_empty() && branch.is_underfull() {
-                        if _is_root {
-                            // Root branch can have any number of keys >= 1 (as long as it has children)
-                            // The only requirement is that keys.len() + 1 == children.len()
-                            // This is already checked above, so root branches are always valid
-                        } else {
-                            return false; // Non-root branch is underfull
-                        }
-                    }
-
-                    // Check that branch has at least one child
-                    if branch.children.is_empty() {
-                        return false; // Branch must have at least one child
-                    }
-
-                    // Check children recursively
-                    for (i, child) in branch.children.iter().enumerate() {
-                        let child_min = if i == 0 {
-                            min_key
-                        } else {
-                            Some(&branch.keys[i - 1])
-                        };
-                        let child_max = if i == branch.keys.len() {
-                            max_key
-                        } else {
-                            Some(&branch.keys[i])
-                        };
-
-                        if !self.check_node_invariants(child, child_min, child_max, false) {
-                            return false;
-                        }
-                    }
-
-                    true
-                } else {
-                    false // Missing arena branch is invalid
-                }
-            }
-        }
-    }
+    // All validation implementation methods moved to validation.rs module
 }
 
 // Default implementation moved to construction.rs module
