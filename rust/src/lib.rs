@@ -1399,10 +1399,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ENHANCED ARENA-BASED ALLOCATION FOR LEAF NODES
     // ============================================================================
 
-    /// Allocate a new leaf node in the arena and return its ID.
-    pub fn allocate_leaf(&mut self, leaf: LeafNode<K, V>) -> NodeId {
-        self.leaf_arena.allocate(leaf)
-    }
+    // allocate_leaf method moved to insert_operations.rs module
 
     /// Deallocate a leaf node from the arena.
     pub fn deallocate_leaf(&mut self, id: NodeId) -> Option<LeafNode<K, V>> {

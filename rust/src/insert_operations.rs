@@ -8,8 +8,12 @@ use crate::error::{BPlusTreeError, BTreeResult, ModifyResult};
 use crate::types::{BPlusTreeMap, NodeRef, LeafNode, BranchNode, NodeId, InsertResult, SplitNodeData};
 use std::marker::PhantomData;
 
-// This module will contain INSERT operations - for now it's just a placeholder
-// We'll move methods here incrementally to avoid breaking the build
+impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
+    /// Allocate a new leaf node in the arena and return its ID.
+    pub fn allocate_leaf(&mut self, leaf: LeafNode<K, V>) -> NodeId {
+        self.leaf_arena.allocate(leaf)
+    }
+}
 
 #[cfg(test)]
 mod tests {
