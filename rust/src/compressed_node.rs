@@ -428,15 +428,83 @@ where
         self.next = next;
     }
 
+    /// Get a key by index (efficient collection accessor method).
+    /// 
+    /// # Arguments
+    /// * `index` - The index of the key to retrieve (0-based)
+    /// 
+    /// # Returns
+    /// Some(&K) if index is valid, None otherwise
+    /// 
+    /// # Performance
+    /// O(1) - Direct access to compressed storage without allocation
+    pub fn keys_get(&self, index: usize) -> Option<&K> {
+        if index < self.len {
+            unsafe {
+                Some(self.key_at(index))
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Get a value by index (efficient collection accessor method).
+    /// 
+    /// # Arguments
+    /// * `index` - The index of the value to retrieve (0-based)
+    /// 
+    /// # Returns
+    /// Some(&V) if index is valid, None otherwise
+    /// 
+    /// # Performance
+    /// O(1) - Direct access to compressed storage without allocation
+    pub fn value_get(&self, index: usize) -> Option<&V> {
+        if index < self.len {
+            unsafe {
+                Some(self.value_at(index))
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Update a value by index (efficient collection accessor method).
+    /// 
+    /// # Arguments
+    /// * `index` - The index of the value to update (0-based)
+    /// * `value` - The new value to store
+    /// 
+    /// # Returns
+    /// Some(old_value) if index is valid and update succeeded, None otherwise
+    /// 
+    /// # Performance
+    /// O(1) - Direct access to compressed storage without allocation
+    pub fn values_put(&mut self, index: usize, value: V) -> Option<V> {
+        if index < self.len {
+            unsafe {
+                let old_value = *self.value_at(index);
+                *self.value_at_mut(index) = value;
+                Some(old_value)
+            }
+        } else {
+            None
+        }
+    }
+
     /// Get a reference to all keys as a Vec (LeafNode compatibility method).
     /// 
-    /// Note: This creates a new Vec by copying all keys from the compressed storage.
-    /// For better performance, consider using keys_iter() instead.
+    /// **Performance Note**: This creates a new Vec by copying all keys from the compressed storage.
+    /// For better performance, consider:
+    /// - `keys_get(index)` for O(1) individual key access
+    /// - `keys_iter()` for efficient iteration without allocation
+    /// 
+    /// **Time Complexity**: O(n) where n is the number of keys
+    /// **Space Complexity**: O(n) - allocates a new Vec
     pub fn keys(&self) -> Vec<K> {
         let mut keys = Vec::with_capacity(self.len);
         for i in 0..self.len {
-            unsafe {
-                keys.push(*self.key_at(i));
+            if let Some(key) = self.keys_get(i) {
+                keys.push(*key);
             }
         }
         keys
@@ -444,13 +512,18 @@ where
 
     /// Get a reference to all values as a Vec (LeafNode compatibility method).
     /// 
-    /// Note: This creates a new Vec by copying all values from the compressed storage.
-    /// For better performance, consider using values_iter() instead.
+    /// **Performance Note**: This creates a new Vec by copying all values from the compressed storage.
+    /// For better performance, consider:
+    /// - `value_get(index)` for O(1) individual value access
+    /// - `values_iter()` for efficient iteration without allocation
+    /// 
+    /// **Time Complexity**: O(n) where n is the number of values
+    /// **Space Complexity**: O(n) - allocates a new Vec
     pub fn values(&self) -> Vec<V> {
         let mut values = Vec::with_capacity(self.len);
         for i in 0..self.len {
-            unsafe {
-                values.push(*self.value_at(i));
+            if let Some(value) = self.value_get(i) {
+                values.push(*value);
             }
         }
         values
@@ -458,14 +531,21 @@ where
 
     /// Get a mutable reference to all values as a Vec (LeafNode compatibility method).
     /// 
-    /// Note: This creates a new Vec by copying all values from the compressed storage.
-    /// Changes to the returned Vec will not affect the original node.
-    /// For in-place modifications, use get_mut() or values_iter_mut().
+    /// **Important**: This creates a new Vec by copying all values from the compressed storage.
+    /// Changes to the returned Vec will **NOT** affect the original node.
+    /// 
+    /// For in-place modifications, use:
+    /// - `values_put(index, value)` for O(1) individual value updates
+    /// - `values_iter_mut()` for efficient mutable iteration
+    /// - `get_mut(key)` for key-based value updates
+    /// 
+    /// **Time Complexity**: O(n) where n is the number of values
+    /// **Space Complexity**: O(n) - allocates a new Vec
     pub fn values_mut(&mut self) -> Vec<V> {
         let mut values = Vec::with_capacity(self.len);
         for i in 0..self.len {
-            unsafe {
-                values.push(*self.value_at(i));
+            if let Some(value) = self.value_get(i) {
+                values.push(*value);
             }
         }
         values
@@ -1111,6 +1191,74 @@ mod tests {
         // Conversion should work seamlessly
         let converted = CompressedLeafNode::from(regular_leaf);
         assert_eq!(converted, compressed_leaf);
+    }
+
+    #[test]
+    fn test_efficient_collection_accessors() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(10);
+        
+        // Test empty node
+        assert_eq!(leaf.keys_get(0), None);
+        assert_eq!(leaf.value_get(0), None);
+        assert_eq!(leaf.values_put(0, 999), None);
+        
+        // Add some data
+        leaf.insert(10, 100);
+        leaf.insert(20, 200);
+        leaf.insert(30, 300);
+        
+        // Test keys_get
+        assert_eq!(leaf.keys_get(0), Some(&10));
+        assert_eq!(leaf.keys_get(1), Some(&20));
+        assert_eq!(leaf.keys_get(2), Some(&30));
+        assert_eq!(leaf.keys_get(3), None); // Out of bounds
+        
+        // Test value_get
+        assert_eq!(leaf.value_get(0), Some(&100));
+        assert_eq!(leaf.value_get(1), Some(&200));
+        assert_eq!(leaf.value_get(2), Some(&300));
+        assert_eq!(leaf.value_get(3), None); // Out of bounds
+        
+        // Test values_put
+        assert_eq!(leaf.values_put(1, 250), Some(200)); // Update middle value
+        assert_eq!(leaf.value_get(1), Some(&250)); // Verify update
+        assert_eq!(leaf.values_put(3, 400), None); // Out of bounds
+        
+        // Verify other values unchanged
+        assert_eq!(leaf.value_get(0), Some(&100));
+        assert_eq!(leaf.value_get(2), Some(&300));
+        
+        // Test that Vec methods still work with updated data
+        assert_eq!(leaf.keys(), vec![10, 20, 30]);
+        assert_eq!(leaf.values(), vec![100, 250, 300]);
+    }
+
+    #[test]
+    fn test_collection_accessor_performance_characteristics() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(10);
+        
+        // Fill the node
+        for i in 0..5 {
+            leaf.insert(i, i * 10);
+        }
+        
+        // Test that accessors work at boundaries
+        assert_eq!(leaf.keys_get(0), Some(&0));
+        assert_eq!(leaf.keys_get(4), Some(&4));
+        assert_eq!(leaf.keys_get(5), None);
+        
+        assert_eq!(leaf.value_get(0), Some(&0));
+        assert_eq!(leaf.value_get(4), Some(&40));
+        assert_eq!(leaf.value_get(5), None);
+        
+        // Test values_put at boundaries
+        assert_eq!(leaf.values_put(0, 999), Some(0));
+        assert_eq!(leaf.values_put(4, 888), Some(40));
+        assert_eq!(leaf.values_put(5, 777), None);
+        
+        // Verify updates
+        assert_eq!(leaf.value_get(0), Some(&999));
+        assert_eq!(leaf.value_get(4), Some(&888));
     }
 
     // Phase 2: Basic Construction Tests
