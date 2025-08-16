@@ -99,6 +99,31 @@ pub struct LeafNode<K, V> {
     pub(crate) next: NodeId,
 }
 
+// Type aliases for different use cases
+/// High-performance leaf node for Copy types (cache-optimized)
+pub type FastLeafNode<K, V> = crate::compressed_node::CompressedLeafNode<K, V>;
+
+/// Flexible leaf node for Clone types (compatibility)
+pub type FlexibleLeafNode<K, V> = LeafNode<K, V>;
+
+// Conditional type selection based on traits
+/// Automatically select the best leaf node type based on trait bounds
+pub trait OptimalLeafNode<K, V> {
+    type Node;
+}
+
+// For Copy types, use CompressedLeafNode
+impl<K, V> OptimalLeafNode<K, V> for (K, V)
+where
+    K: Copy + Ord,
+    V: Copy,
+{
+    type Node = crate::compressed_node::CompressedLeafNode<K, V>;
+}
+
+// For non-Copy types, use regular LeafNode  
+// (This would require more complex trait bounds, but shows the concept)
+
 /// Internal (branch) node containing keys and child pointers.
 #[derive(Debug, Clone)]
 pub struct BranchNode<K, V> {

@@ -15,6 +15,7 @@ use crate::types::{NodeId, InsertResult, SplitNodeData};
 /// 
 /// Keys and values are stored in separate contiguous regions within the data array:
 /// [key0, key1, ..., keyN, value0, value1, ..., valueN]
+#[derive(Debug, Clone)]
 #[repr(C, align(64))]
 pub struct CompressedLeafNode<K, V> {
     /// Maximum number of key-value pairs this node can hold
@@ -49,6 +50,18 @@ where
             _phantom: PhantomData,
             data: [0; 248],
         }
+    }
+
+    /// Create a new empty compressed leaf node with usize capacity (for compatibility).
+    /// 
+    /// # Arguments
+    /// * `capacity` - Maximum number of key-value pairs (will be clamped to u16::MAX)
+    /// 
+    /// # Returns
+    /// A new empty compressed leaf node
+    pub fn new_with_usize_capacity(capacity: usize) -> Self {
+        let clamped_capacity = capacity.min(u16::MAX as usize) as u16;
+        Self::new(clamped_capacity)
     }
 
     /// Returns the number of key-value pairs in this leaf.
@@ -354,6 +367,17 @@ where
         }
     }
 
+    /// Get a mutable reference to a value by key (LeafNode compatibility method).
+    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
+        let (index, found) = self.find_key_index(key);
+        
+        if found {
+            Some(unsafe { self.value_at_mut(index) })
+        } else {
+            None
+        }
+    }
+
     /// Remove a key-value pair from the leaf.
     /// Returns the removed value and whether the node is now underfull.
     pub fn remove(&mut self, key: &K) -> (Option<V>, bool) {
@@ -414,6 +438,33 @@ where
     /// Set the next node ID in the linked list.
     pub fn set_next(&mut self, next: NodeId) {
         self.next = next;
+    }
+
+    /// Check if this leaf needs to be split (LeafNode compatibility method).
+    pub fn needs_split(&self) -> bool {
+        self.len > self.capacity
+    }
+
+    /// Extract all content from this leaf (used for merging) - LeafNode compatibility method.
+    pub fn extract_all(&mut self) -> (Vec<K>, Vec<V>, NodeId) {
+        let mut keys = Vec::with_capacity(self.len as usize);
+        let mut values = Vec::with_capacity(self.len as usize);
+        
+        // Copy all keys and values
+        for i in 0..self.len as usize {
+            unsafe {
+                keys.push(*self.key_at(i));
+                values.push(*self.value_at(i));
+            }
+        }
+        
+        let next = self.next;
+        
+        // Clear this node
+        self.len = 0;
+        self.next = crate::types::NULL_NODE;
+        
+        (keys, values, next)
     }
 
     // ============================================================================
@@ -518,22 +569,208 @@ where
     }
 
     // ============================================================================
-    // VEC-COMPATIBLE INTERFACE
+    // COLLECTION ACCESSOR METHODS
     // ============================================================================
-
-    /// Get a Vec-compatible view of the keys in this leaf node.
-    pub fn keys(&self) -> CompressedKeyView<K, V> {
-        CompressedKeyView { node: self }
+    
+    // Key collection accessors
+    
+    /// Get a key at the specified index.
+    pub fn get_key(&self, index: usize) -> Option<&K> {
+        if index < self.len as usize {
+            Some(unsafe { self.key_at(index) })
+        } else {
+            None
+        }
     }
 
-    /// Get a Vec-compatible view of the values in this leaf node.
-    pub fn values(&self) -> CompressedValueView<K, V> {
-        CompressedValueView { node: self }
+    /// Get the first key in the node.
+    pub fn first_key(&self) -> Option<&K> {
+        if self.len > 0 {
+            Some(unsafe { self.key_at(0) })
+        } else {
+            None
+        }
+    }
+    
+    /// Get the last key in the node.
+    pub fn last_key(&self) -> Option<&K> {
+        if self.len > 0 {
+            Some(unsafe { self.key_at((self.len - 1) as usize) })
+        } else {
+            None
+        }
+    }
+    
+    /// Create an iterator over all keys in sorted order.
+    pub fn keys_iter(&self) -> impl Iterator<Item = &K> {
+        (0..self.len as usize).map(move |i| unsafe { self.key_at(i) })
+    }
+    
+    /// Collect all keys into a Vec (for compatibility with existing code).
+    pub fn collect_keys(&self) -> Vec<K> {
+        let mut keys = Vec::with_capacity(self.len as usize);
+        for i in 0..self.len as usize {
+            keys.push(unsafe { *self.key_at(i) });
+        }
+        keys
+    }
+    
+    // Value collection accessors
+    
+    /// Get a value at the specified index.
+    pub fn get_value(&self, index: usize) -> Option<&V> {
+        if index < self.len as usize {
+            Some(unsafe { self.value_at(index) })
+        } else {
+            None
+        }
+    }
+    
+    /// Get a mutable reference to a value at the specified index.
+    pub fn get_value_mut(&mut self, index: usize) -> Option<&mut V> {
+        if index < self.len as usize {
+            Some(unsafe { self.value_at_mut(index) })
+        } else {
+            None
+        }
+    }
+    
+    /// Get the first value in the node.
+    pub fn first_value(&self) -> Option<&V> {
+        if self.len > 0 {
+            Some(unsafe { self.value_at(0) })
+        } else {
+            None
+        }
+    }
+    
+    /// Get the last value in the node.
+    pub fn last_value(&self) -> Option<&V> {
+        if self.len > 0 {
+            Some(unsafe { self.value_at((self.len - 1) as usize) })
+        } else {
+            None
+        }
+    }
+    
+    /// Get a mutable reference to the first value in the node.
+    pub fn first_value_mut(&mut self) -> Option<&mut V> {
+        if self.len > 0 {
+            Some(unsafe { self.value_at_mut(0) })
+        } else {
+            None
+        }
+    }
+    
+    /// Get a mutable reference to the last value in the node.
+    pub fn last_value_mut(&mut self) -> Option<&mut V> {
+        if self.len > 0 {
+            Some(unsafe { self.value_at_mut((self.len - 1) as usize) })
+        } else {
+            None
+        }
+    }
+    
+    /// Create an iterator over all values in key-sorted order.
+    pub fn values_iter(&self) -> impl Iterator<Item = &V> {
+        (0..self.len as usize).map(move |i| unsafe { self.value_at(i) })
+    }
+    
+    /// Create a mutable iterator over all values in key-sorted order.
+    /// Note: Due to Rust's borrowing rules, this returns a custom iterator type.
+    pub fn values_iter_mut(&mut self) -> ValuesMutIter<K, V> {
+        ValuesMutIter {
+            node: self,
+            index: 0,
+        }
     }
 
-    /// Get a mutable Vec-compatible view of the values in this leaf node.
-    pub fn values_mut(&mut self) -> CompressedValueViewMut<K, V> {
-        CompressedValueViewMut { node: self }
+    /// Collect all values into a Vec (for compatibility with existing code).
+    pub fn collect_values(&self) -> Vec<V> {
+        let mut values = Vec::with_capacity(self.len as usize);
+        for i in 0..self.len as usize {
+            values.push(unsafe { *self.value_at(i) });
+        }
+        values
+    }
+    
+    // Pair collection accessors
+    
+    /// Get a key-value pair at the specified index.
+    pub fn get_pair(&self, index: usize) -> Option<(&K, &V)> {
+        if index < self.len as usize {
+            Some(unsafe { (self.key_at(index), self.value_at(index)) })
+        } else {
+            None
+        }
+    }
+    
+    /// Get a key-value pair with mutable value at the specified index.
+    pub fn get_pair_mut(&mut self, index: usize) -> Option<(&K, &mut V)> {
+        if index < self.len as usize {
+            unsafe { 
+                let key_ptr = self.key_at(index) as *const K;
+                let value_ptr = self.value_at_mut(index) as *mut V;
+                Some((&*key_ptr, &mut *value_ptr))
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Get the first key-value pair in the node.
+    pub fn first_pair(&self) -> Option<(&K, &V)> {
+        if self.len > 0 {
+            Some(unsafe { (self.key_at(0), self.value_at(0)) })
+        } else {
+            None
+        }
+    }
+    
+    /// Get the last key-value pair in the node.
+    pub fn last_pair(&self) -> Option<(&K, &V)> {
+        if self.len > 0 {
+            let index = (self.len - 1) as usize;
+            Some(unsafe { (self.key_at(index), self.value_at(index)) })
+        } else {
+            None
+        }
+    }
+    
+    /// Get the first key-value pair with mutable value in the node.
+    pub fn first_pair_mut(&mut self) -> Option<(&K, &mut V)> {
+        if self.len > 0 {
+            unsafe { 
+                let key_ptr = self.key_at(0) as *const K;
+                let value_ptr = self.value_at_mut(0) as *mut V;
+                Some((&*key_ptr, &mut *value_ptr))
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Get the last key-value pair with mutable value in the node.
+    pub fn last_pair_mut(&mut self) -> Option<(&K, &mut V)> {
+        if self.len > 0 {
+            let index = (self.len - 1) as usize;
+            unsafe { 
+                let key_ptr = self.key_at(index) as *const K;
+                let value_ptr = self.value_at_mut(index) as *mut V;
+                Some((&*key_ptr, &mut *value_ptr))
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Collect all key-value pairs into a Vec (for compatibility with existing code).
+    pub fn collect_pairs(&self) -> Vec<(K, V)> {
+        let mut pairs = Vec::with_capacity(self.len as usize);
+        for i in 0..self.len as usize {
+            pairs.push(unsafe { (*self.key_at(i), *self.value_at(i)) });
+        }
+        pairs
     }
 
     /// Iterator over key-value pairs in sorted order.
@@ -543,6 +780,16 @@ where
             index: 0,
             _phantom: PhantomData,
         }
+    }
+}
+
+impl<K, V> Default for CompressedLeafNode<K, V>
+where
+    K: Copy + Ord,
+    V: Copy,
+{
+    fn default() -> Self {
+        Self::new(16) // Default capacity of 16, matching LeafNode
     }
 }
 
@@ -572,169 +819,30 @@ where
     }
 }
 
-/// Vec-compatible view of keys in a CompressedLeafNode.
-pub struct CompressedKeyView<'a, K, V> {
-    node: &'a CompressedLeafNode<K, V>,
-}
-
-impl<'a, K, V> CompressedKeyView<'a, K, V>
-where
-    K: Copy + Ord,
-    V: Copy,
-{
-    /// Get the length of the keys.
-    pub fn len(&self) -> usize {
-        self.node.len as usize
-    }
-
-    /// Check if the keys are empty.
-    pub fn is_empty(&self) -> bool {
-        self.node.len == 0
-    }
-
-    /// Get a key by index.
-    pub fn get(&self, index: usize) -> Option<&K> {
-        if index < self.len() {
-            Some(unsafe { self.node.key_at(index) })
-        } else {
-            None
-        }
-    }
-}
-
-impl<'a, K, V> std::ops::Index<usize> for CompressedKeyView<'a, K, V>
-where
-    K: Copy + Ord,
-    V: Copy,
-{
-    type Output = K;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        if index >= self.len() {
-            panic!("index out of bounds: the len is {} but the index is {}", self.len(), index);
-        }
-        unsafe { self.node.key_at(index) }
-    }
-}
-
-/// Vec-compatible view of values in a CompressedLeafNode.
-pub struct CompressedValueView<'a, K, V> {
-    node: &'a CompressedLeafNode<K, V>,
-}
-
-impl<'a, K, V> CompressedValueView<'a, K, V>
-where
-    K: Copy + Ord,
-    V: Copy,
-{
-    /// Get the length of the values.
-    pub fn len(&self) -> usize {
-        self.node.len as usize
-    }
-
-    /// Check if the values are empty.
-    pub fn is_empty(&self) -> bool {
-        self.node.len == 0
-    }
-
-    /// Get a value by index.
-    pub fn get(&self, index: usize) -> Option<&V> {
-        if index < self.len() {
-            Some(unsafe { self.node.value_at(index) })
-        } else {
-            None
-        }
-    }
-}
-
-impl<'a, K, V> std::ops::Index<usize> for CompressedValueView<'a, K, V>
-where
-    K: Copy + Ord,
-    V: Copy,
-{
-    type Output = V;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        if index >= self.len() {
-            panic!("index out of bounds: the len is {} but the index is {}", self.len(), index);
-        }
-        unsafe { self.node.value_at(index) }
-    }
-}
-
-/// Mutable Vec-compatible view of values in a CompressedLeafNode.
-pub struct CompressedValueViewMut<'a, K, V> {
+/// Mutable iterator over values in a CompressedLeafNode.
+pub struct ValuesMutIter<'a, K, V> {
     node: &'a mut CompressedLeafNode<K, V>,
+    index: usize,
 }
 
-impl<'a, K, V> CompressedValueViewMut<'a, K, V>
+impl<'a, K, V> Iterator for ValuesMutIter<'a, K, V>
 where
     K: Copy + Ord,
     V: Copy,
 {
-    /// Get the length of the values.
-    pub fn len(&self) -> usize {
-        self.node.len as usize
-    }
+    type Item = &'a mut V;
 
-    /// Check if the values are empty.
-    pub fn is_empty(&self) -> bool {
-        self.node.len == 0
-    }
-
-    /// Get a value by index.
-    pub fn get(&self, index: usize) -> Option<&V> {
-        if index < self.len() {
-            Some(unsafe { self.node.value_at(index) })
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.node.len as usize {
+            let value = unsafe { 
+                // SAFETY: We know the index is valid and we're returning a unique reference
+                &mut *(self.node.value_at_mut(self.index) as *mut V)
+            };
+            self.index += 1;
+            Some(value)
         } else {
             None
         }
-    }
-
-    /// Get a mutable reference to a value by index.
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut V> {
-        if index < self.len() {
-            Some(unsafe { self.node.value_at_mut(index) })
-        } else {
-            None
-        }
-    }
-
-    /// Set a value at the given index.
-    pub fn set(&mut self, index: usize, value: V) {
-        if index < self.len() {
-            unsafe { self.node.set_value_at(index, value) };
-        } else {
-            panic!("index out of bounds: the len is {} but the index is {}", self.len(), index);
-        }
-    }
-}
-
-impl<'a, K, V> std::ops::Index<usize> for CompressedValueViewMut<'a, K, V>
-where
-    K: Copy + Ord,
-    V: Copy,
-{
-    type Output = V;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        if index >= self.len() {
-            panic!("index out of bounds: the len is {} but the index is {}", self.len(), index);
-        }
-        unsafe { self.node.value_at(index) }
-    }
-}
-
-impl<'a, K, V> std::ops::IndexMut<usize> for CompressedValueViewMut<'a, K, V>
-where
-    K: Copy + Ord,
-    V: Copy,
-{
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        if index >= self.len() {
-            panic!("index out of bounds: the len is {} but the index is {}", self.len(), index);
-        }
-        unsafe { self.node.value_at_mut(index) }
     }
 }
 
@@ -1838,13 +1946,20 @@ mod tests {
         }
     }
 
-    // Phase 10: Vec-Compatible Interface Tests
+    // Phase 10: Collection Accessor Tests
 
     #[test]
-    fn keys_view_functionality() {
+    fn test_key_accessors() {
         let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
         
-        // Add some items
+        // Test empty node
+        assert_eq!(leaf.get_key(0), None);
+        assert_eq!(leaf.first_key(), None);
+        assert_eq!(leaf.last_key(), None);
+        assert_eq!(leaf.keys_iter().count(), 0);
+        assert_eq!(leaf.collect_keys(), Vec::<i32>::new());
+        
+        // Add some items in unsorted order
         let keys = [30, 10, 50, 20, 40];
         for &key in &keys {
             match leaf.insert(key, key * 10) {
@@ -1853,28 +1968,39 @@ mod tests {
             }
         }
         
-        let keys_view = leaf.keys();
+        // Test key accessors (should be in sorted order)
+        assert_eq!(leaf.get_key(0), Some(&10));
+        assert_eq!(leaf.get_key(1), Some(&20));
+        assert_eq!(leaf.get_key(2), Some(&30));
+        assert_eq!(leaf.get_key(3), Some(&40));
+        assert_eq!(leaf.get_key(4), Some(&50));
+        assert_eq!(leaf.get_key(5), None);
         
-        // Test length and emptiness
-        assert_eq!(keys_view.len(), 5);
-        assert!(!keys_view.is_empty());
+        // Test first/last key
+        assert_eq!(leaf.first_key(), Some(&10));
+        assert_eq!(leaf.last_key(), Some(&50));
         
-        // Test indexing (should be in sorted order)
-        assert_eq!(keys_view[0], 10);
-        assert_eq!(keys_view[1], 20);
-        assert_eq!(keys_view[2], 30);
-        assert_eq!(keys_view[3], 40);
-        assert_eq!(keys_view[4], 50);
+        // Test keys iterator
+        let collected: Vec<&i32> = leaf.keys_iter().collect();
+        assert_eq!(collected, vec![&10, &20, &30, &40, &50]);
         
-        // Test get method
-        assert_eq!(keys_view.get(0), Some(&10));
-        assert_eq!(keys_view.get(4), Some(&50));
-        assert_eq!(keys_view.get(5), None);
+        // Test collect_keys
+        assert_eq!(leaf.collect_keys(), vec![10, 20, 30, 40, 50]);
     }
 
     #[test]
-    fn values_view_functionality() {
+    fn test_value_accessors() {
         let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        
+        // Test empty node
+        assert_eq!(leaf.get_value(0), None);
+        assert_eq!(leaf.get_value_mut(0), None);
+        assert_eq!(leaf.first_value(), None);
+        assert_eq!(leaf.last_value(), None);
+        assert_eq!(leaf.first_value_mut(), None);
+        assert_eq!(leaf.last_value_mut(), None);
+        assert_eq!(leaf.values_iter().count(), 0);
+        assert_eq!(leaf.collect_values(), Vec::<i32>::new());
         
         // Add some items
         for i in 0..3 {
@@ -1884,25 +2010,42 @@ mod tests {
             }
         }
         
-        let values_view = leaf.values();
+        // Test value accessors
+        assert_eq!(leaf.get_value(0), Some(&0));
+        assert_eq!(leaf.get_value(1), Some(&100));
+        assert_eq!(leaf.get_value(2), Some(&200));
+        assert_eq!(leaf.get_value(3), None);
         
-        // Test length and emptiness
-        assert_eq!(values_view.len(), 3);
-        assert!(!values_view.is_empty());
+        // Test first/last value
+        assert_eq!(leaf.first_value(), Some(&0));
+        assert_eq!(leaf.last_value(), Some(&200));
         
-        // Test indexing
-        assert_eq!(values_view[0], 0);
-        assert_eq!(values_view[1], 100);
-        assert_eq!(values_view[2], 200);
+        // Test mutable value accessors
+        if let Some(value) = leaf.get_value_mut(1) {
+            *value = 999;
+        }
+        assert_eq!(leaf.get_value(1), Some(&999));
         
-        // Test get method
-        assert_eq!(values_view.get(0), Some(&0));
-        assert_eq!(values_view.get(2), Some(&200));
-        assert_eq!(values_view.get(3), None);
+        // Test first/last mutable value
+        if let Some(value) = leaf.first_value_mut() {
+            *value = 777;
+        }
+        if let Some(value) = leaf.last_value_mut() {
+            *value = 888;
+        }
+        assert_eq!(leaf.first_value(), Some(&777));
+        assert_eq!(leaf.last_value(), Some(&888));
+        
+        // Test values iterator
+        let collected: Vec<&i32> = leaf.values_iter().collect();
+        assert_eq!(collected, vec![&777, &999, &888]);
+        
+        // Test collect_values
+        assert_eq!(leaf.collect_values(), vec![777, 999, 888]);
     }
 
     #[test]
-    fn values_mut_view_functionality() {
+    fn test_mutable_values_iterator() {
         let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
         
         // Add some items
@@ -1913,61 +2056,292 @@ mod tests {
             }
         }
         
-        {
-            let mut values_view = leaf.values_mut();
-            
-            // Test length and emptiness
-            assert_eq!(values_view.len(), 3);
-            assert!(!values_view.is_empty());
-            
-            // Test mutable indexing
-            values_view[1] = 999;
-            
-            // Test set method
-            values_view.set(2, 888);
-            
-            // Test get_mut
-            if let Some(val) = values_view.get_mut(0) {
-                *val = 777;
+        // Modify all values through mutable iterator
+        for (i, value) in leaf.values_iter_mut().enumerate() {
+            *value = ((i + 1) * 1000) as i32;
+        }
+
+        // Verify changes
+        assert_eq!(leaf.get_value(0), Some(&1000));
+        assert_eq!(leaf.get_value(1), Some(&2000));
+        assert_eq!(leaf.get_value(2), Some(&3000));
+    }
+
+    #[test]
+    fn test_pair_accessors() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        
+        // Test empty node
+        assert_eq!(leaf.get_pair(0), None);
+        assert_eq!(leaf.get_pair_mut(0), None);
+        assert_eq!(leaf.first_pair(), None);
+        assert_eq!(leaf.last_pair(), None);
+        assert_eq!(leaf.first_pair_mut(), None);
+        assert_eq!(leaf.last_pair_mut(), None);
+        assert_eq!(leaf.collect_pairs(), Vec::<(i32, i32)>::new());
+        
+        // Add some items
+        let keys = [20, 10, 30];
+        for &key in &keys {
+            match leaf.insert(key, key * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
             }
         }
         
-        // Verify changes were applied
-        assert_eq!(leaf.get(&0), Some(&777));
+        // Test pair accessors (should be in sorted order)
+        assert_eq!(leaf.get_pair(0), Some((&10, &100)));
+        assert_eq!(leaf.get_pair(1), Some((&20, &200)));
+        assert_eq!(leaf.get_pair(2), Some((&30, &300)));
+        assert_eq!(leaf.get_pair(3), None);
+        
+        // Test first/last pair
+        assert_eq!(leaf.first_pair(), Some((&10, &100)));
+        assert_eq!(leaf.last_pair(), Some((&30, &300)));
+        
+        // Test mutable pair accessors
+        if let Some((key, value)) = leaf.get_pair_mut(1) {
+            assert_eq!(*key, 20);
+            *value = 999;
+        }
+        assert_eq!(leaf.get_pair(1), Some((&20, &999)));
+        
+        // Test first/last mutable pair
+        if let Some((key, value)) = leaf.first_pair_mut() {
+            assert_eq!(*key, 10);
+            *value = 777;
+        }
+        if let Some((key, value)) = leaf.last_pair_mut() {
+            assert_eq!(*key, 30);
+            *value = 888;
+        }
+        
+        // Verify changes
+        assert_eq!(leaf.first_pair(), Some((&10, &777)));
+        assert_eq!(leaf.last_pair(), Some((&30, &888)));
+        
+        // Test collect_pairs
+        assert_eq!(leaf.collect_pairs(), vec![(10, 777), (20, 999), (30, 888)]);
+    }
+
+    #[test]
+    fn test_collection_accessors_bounds_checking() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        
+        // Add one item
+        match leaf.insert(42, 100) {
+            InsertResult::Updated(None) => {},
+            _ => panic!("Expected new insertion"),
+        }
+        
+        // Test valid indices
+        assert_eq!(leaf.get_key(0), Some(&42));
+        assert_eq!(leaf.get_value(0), Some(&100));
+        assert_eq!(leaf.get_pair(0), Some((&42, &100)));
+        
+        // Test invalid indices
+        assert_eq!(leaf.get_key(1), None);
+        assert_eq!(leaf.get_value(1), None);
+        assert_eq!(leaf.get_value_mut(1), None);
+        assert_eq!(leaf.get_pair(1), None);
+        assert_eq!(leaf.get_pair_mut(1), None);
+        
+        // Test way out of bounds
+        assert_eq!(leaf.get_key(100), None);
+        assert_eq!(leaf.get_value(100), None);
+        assert_eq!(leaf.get_pair(100), None);
+    }
+
+    #[test]
+    fn test_collection_accessors_after_operations() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        
+        // Insert items
+        for i in 0..5 {
+            match leaf.insert(i, i * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        
+        // Verify initial state
+        assert_eq!(leaf.collect_keys(), vec![0, 1, 2, 3, 4]);
+        assert_eq!(leaf.collect_values(), vec![0, 10, 20, 30, 40]);
+        
+        // Remove middle item
+        leaf.remove(&2);
+        
+        // Verify state after removal
+        assert_eq!(leaf.collect_keys(), vec![0, 1, 3, 4]);
+        assert_eq!(leaf.collect_values(), vec![0, 10, 30, 40]);
+        assert_eq!(leaf.first_key(), Some(&0));
+        assert_eq!(leaf.last_key(), Some(&4));
+        assert_eq!(leaf.first_value(), Some(&0));
+        assert_eq!(leaf.last_value(), Some(&40));
+        
+        // Test that removed index is now out of bounds
+        assert_eq!(leaf.get_key(4), None);
+        assert_eq!(leaf.get_value(4), None);
+        assert_eq!(leaf.get_pair(4), None);
+    }
+
+    // Phase 11: LeafNode Compatibility Tests
+
+    #[test]
+    fn test_get_mut_by_key() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        
+        // Insert some items
+        for i in 0..3 {
+            match leaf.insert(i, i * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        
+        // Test get_mut with existing key
+        if let Some(value) = leaf.get_mut(&1) {
+            *value = 999;
+        }
+        
+        // Verify the change
         assert_eq!(leaf.get(&1), Some(&999));
-        assert_eq!(leaf.get(&2), Some(&888));
+        assert_eq!(leaf.get(&0), Some(&0));
+        assert_eq!(leaf.get(&2), Some(&20));
+        
+        // Test get_mut with non-existent key
+        assert_eq!(leaf.get_mut(&10), None);
     }
 
     #[test]
-    fn empty_views_functionality() {
-        let leaf = CompressedLeafNode::<i32, i32>::new(8);
+    fn test_needs_split() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(4);
         
-        let keys_view = leaf.keys();
-        let values_view = leaf.values();
+        // Initially should not need split
+        assert!(!leaf.needs_split());
         
-        assert_eq!(keys_view.len(), 0);
-        assert!(keys_view.is_empty());
-        assert_eq!(keys_view.get(0), None);
+        // Fill to capacity
+        for i in 0..4 {
+            match leaf.insert(i, i * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
         
-        assert_eq!(values_view.len(), 0);
-        assert!(values_view.is_empty());
-        assert_eq!(values_view.get(0), None);
+        // At capacity, should not need split
+        assert!(!leaf.needs_split());
+        assert!(leaf.is_full());
+        
+        // Force overfull state (this would normally trigger split)
+        leaf.len = 5; // Simulate overfull
+        assert!(leaf.needs_split());
+        
+        // Reset
+        leaf.len = 4;
+        assert!(!leaf.needs_split());
     }
 
     #[test]
-    #[should_panic(expected = "index out of bounds")]
-    fn keys_view_panic_on_out_of_bounds() {
-        let leaf = CompressedLeafNode::<i32, i32>::new(8);
-        let keys_view = leaf.keys();
-        let _ = keys_view[0]; // Should panic
+    fn test_extract_all() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        
+        // Insert some items
+        let keys = [10, 20, 30];
+        for &key in &keys {
+            match leaf.insert(key, key * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        
+        // Set next pointer
+        leaf.set_next(999);
+        
+        // Extract all content
+        let (extracted_keys, extracted_values, next_ptr) = leaf.extract_all();
+        
+        // Verify extracted content
+        assert_eq!(extracted_keys, vec![10, 20, 30]);
+        assert_eq!(extracted_values, vec![100, 200, 300]);
+        assert_eq!(next_ptr, 999);
+        
+        // Verify leaf is now empty
+        assert_eq!(leaf.len(), 0);
+        assert!(leaf.is_empty());
+        assert_eq!(leaf.next(), crate::types::NULL_NODE);
+        
+        // Verify all keys are gone
+        for &key in &keys {
+            assert_eq!(leaf.get(&key), None);
+        }
     }
 
     #[test]
-    #[should_panic(expected = "index out of bounds")]
-    fn values_view_panic_on_out_of_bounds() {
-        let leaf = CompressedLeafNode::<i32, i32>::new(8);
-        let values_view = leaf.values();
-        let _ = values_view[0]; // Should panic
+    fn test_new_with_usize_capacity() {
+        // Test normal capacity
+        let leaf1 = CompressedLeafNode::<i32, i32>::new_with_usize_capacity(16);
+        assert_eq!(leaf1.capacity(), 16);
+        
+        // Test capacity clamping
+        let leaf2 = CompressedLeafNode::<i32, i32>::new_with_usize_capacity(100000);
+        assert_eq!(leaf2.capacity(), u16::MAX as usize);
+        
+        // Test zero capacity
+        let leaf3 = CompressedLeafNode::<i32, i32>::new_with_usize_capacity(0);
+        assert_eq!(leaf3.capacity(), 0);
+    }
+
+    // Phase 11: External Code Compatibility Demonstration
+
+    #[test]
+    fn demonstrate_external_code_patterns() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        
+        // Add some test data
+        for i in [30, 10, 50, 20, 40] {
+            match leaf.insert(i, i * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        
+        // Pattern 1: Instead of leaf.keys().len() -> use leaf.len()
+        assert_eq!(leaf.len(), 5);
+        
+        // Pattern 2: Instead of leaf.keys()[0] -> use leaf.first_key()
+        assert_eq!(leaf.first_key(), Some(&10));
+        
+        // Pattern 3: Instead of leaf.keys().last() -> use leaf.last_key()
+        assert_eq!(leaf.last_key(), Some(&50));
+        
+        // Pattern 4: Instead of leaf.keys().get(index) -> use leaf.get_key(index)
+        assert_eq!(leaf.get_key(2), Some(&30));
+        
+        // Pattern 5: Instead of leaf.values()[index] -> use leaf.get_value(index)
+        assert_eq!(leaf.get_value(2), Some(&300));
+        
+        // Pattern 6: Instead of leaf.values_mut()[index] = value -> use get_value_mut
+        if let Some(value) = leaf.get_value_mut(2) {
+            *value = 999;
+        }
+        assert_eq!(leaf.get_value(2), Some(&999));
+        
+        // Pattern 7: Instead of iterating over leaf.keys() -> use leaf.keys_iter()
+        let keys: Vec<i32> = leaf.keys_iter().copied().collect();
+        assert_eq!(keys, vec![10, 20, 30, 40, 50]);
+        
+        // Pattern 8: Instead of iterating over leaf.values() -> use leaf.values_iter()
+        let values: Vec<i32> = leaf.values_iter().copied().collect();
+        assert_eq!(values, vec![100, 200, 999, 400, 500]);
+        
+        // Pattern 9: For compatibility, can still get Vec if needed
+        assert_eq!(leaf.collect_keys(), vec![10, 20, 30, 40, 50]);
+        assert_eq!(leaf.collect_values(), vec![100, 200, 999, 400, 500]);
+        
+        // Pattern 10: Access key-value pairs together
+        assert_eq!(leaf.get_pair(1), Some((&20, &200)));
+        assert_eq!(leaf.first_pair(), Some((&10, &100)));
+        assert_eq!(leaf.last_pair(), Some((&50, &500)));
     }
 
     // Memory efficiency verification
