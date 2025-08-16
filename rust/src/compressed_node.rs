@@ -152,7 +152,35 @@ where
 
     /// Get a value by key.
     pub fn get(&self, key: &K) -> Option<&V> {
-        todo!("Implement through TDD")
+        if self.len == 0 {
+            return None;
+        }
+
+        // Binary search through the keys
+        let mut left = 0;
+        let mut right = self.len as usize;
+
+        while left < right {
+            let mid = left + (right - left) / 2;
+            
+            // Safety: mid is always < self.len due to binary search bounds
+            let mid_key = unsafe { self.key_at(mid) };
+            
+            match mid_key.cmp(key) {
+                std::cmp::Ordering::Equal => {
+                    // Found the key, return corresponding value
+                    return Some(unsafe { self.value_at(mid) });
+                }
+                std::cmp::Ordering::Less => {
+                    left = mid + 1;
+                }
+                std::cmp::Ordering::Greater => {
+                    right = mid;
+                }
+            }
+        }
+
+        None // Key not found
     }
 
     /// Remove a key-value pair from the leaf.
@@ -293,10 +321,63 @@ mod tests {
     }
 
     #[test]
-    #[should_panic] // Remove this when implementing
     fn get_nonexistent_key() {
         let leaf = CompressedLeafNode::<i32, i32>::new(8);
         assert_eq!(leaf.get(&42), None);
+    }
+
+    #[test]
+    fn get_from_empty_leaf() {
+        let leaf = CompressedLeafNode::<i32, i32>::new(10);
+        assert_eq!(leaf.get(&1), None);
+        assert_eq!(leaf.get(&0), None);
+        assert_eq!(leaf.get(&-1), None);
+    }
+
+    #[test]
+    fn get_boundary_conditions() {
+        // This test will need insert to be implemented first
+        // Testing get with min/max values and edge cases
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(10);
+        
+        // Will need to manually set up data for this test
+        // For now, just test empty leaf boundary conditions
+        assert_eq!(leaf.get(&i32::MIN), None);
+        assert_eq!(leaf.get(&i32::MAX), None);
+        assert_eq!(leaf.get(&0), None);
+    }
+
+    #[test]
+    fn get_with_manual_data_setup() {
+        // Manually set up a leaf with known data to test binary search
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(10);
+        
+        // Manually insert sorted data: keys [10, 20, 30], values [100, 200, 300]
+        leaf.len = 3;
+        unsafe {
+            leaf.set_key_at(0, 10);
+            leaf.set_key_at(1, 20);
+            leaf.set_key_at(2, 30);
+            leaf.set_value_at(0, 100);
+            leaf.set_value_at(1, 200);
+            leaf.set_value_at(2, 300);
+        }
+        
+        // Test exact matches
+        assert_eq!(leaf.get(&10), Some(&100));
+        assert_eq!(leaf.get(&20), Some(&200));
+        assert_eq!(leaf.get(&30), Some(&300));
+        
+        // Test non-existent keys
+        assert_eq!(leaf.get(&5), None);   // Before first
+        assert_eq!(leaf.get(&15), None);  // Between first and second
+        assert_eq!(leaf.get(&25), None);  // Between second and third
+        assert_eq!(leaf.get(&35), None);  // After last
+        
+        // Test boundary values
+        assert_eq!(leaf.get(&9), None);
+        assert_eq!(leaf.get(&11), None);
+        assert_eq!(leaf.get(&31), None);
     }
 
     // Phase 4: Multiple Insert Tests (will fail until implemented)
