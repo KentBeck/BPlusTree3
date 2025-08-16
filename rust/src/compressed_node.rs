@@ -137,6 +137,41 @@ where
     unsafe fn set_value_at(&mut self, index: usize, value: V) {
         *self.values_ptr_mut().add(index) = value;
     }
+
+    /// Find the index for a key using binary search.
+    /// Returns (index, found) where:
+    /// - If found: index is the position of the key
+    /// - If not found: index is where the key should be inserted
+    #[inline]
+    fn find_key_index(&self, key: &K) -> (usize, bool) {
+        if self.len == 0 {
+            return (0, false);
+        }
+
+        let mut left = 0;
+        let mut right = self.len as usize;
+
+        while left < right {
+            let mid = left + (right - left) / 2;
+            
+            // Safety: mid is always < self.len due to binary search bounds
+            let mid_key = unsafe { self.key_at(mid) };
+            
+            match mid_key.cmp(key) {
+                std::cmp::Ordering::Equal => {
+                    return (mid, true); // Found exact match
+                }
+                std::cmp::Ordering::Less => {
+                    left = mid + 1;
+                }
+                std::cmp::Ordering::Greater => {
+                    right = mid;
+                }
+            }
+        }
+
+        (left, false) // Not found, return insertion point
+    }
 }
 
 // Placeholder implementations - will be implemented through TDD
@@ -148,42 +183,22 @@ where
     /// Insert a key-value pair into the leaf.
     /// Returns Ok(Some(old_value)) if key existed, Ok(None) if new key, Err if full.
     pub fn insert(&mut self, key: K, value: V) -> Result<Option<V>, &'static str> {
-        // Check if we have space (unless it's an update)
+        let (index, found) = self.find_key_index(&key);
+        
+        if found {
+            // Key exists - update value and return old value
+            let old_value = unsafe { *self.value_at(index) };
+            unsafe { self.set_value_at(index, value) };
+            return Ok(Some(old_value));
+        }
+
+        // Key doesn't exist - check capacity
         if self.len >= self.capacity {
-            // Check if this is an update to existing key
-            if self.get(&key).is_none() {
-                return Err("Leaf is at capacity");
-            }
+            return Err("Leaf is at capacity");
         }
 
-        // Binary search to find insertion point
-        let mut left = 0;
-        let mut right = self.len as usize;
-
-        while left < right {
-            let mid = left + (right - left) / 2;
-            
-            // Safety: mid is always < self.len due to binary search bounds
-            let mid_key = unsafe { self.key_at(mid) };
-            
-            match mid_key.cmp(&key) {
-                std::cmp::Ordering::Equal => {
-                    // Key exists - update value and return old value
-                    let old_value = unsafe { *self.value_at(mid) };
-                    unsafe { self.set_value_at(mid, value) };
-                    return Ok(Some(old_value));
-                }
-                std::cmp::Ordering::Less => {
-                    left = mid + 1;
-                }
-                std::cmp::Ordering::Greater => {
-                    right = mid;
-                }
-            }
-        }
-
-        // Key doesn't exist - insert at position 'left'
-        let insert_pos = left;
+        // Insert new key at the found position
+        let insert_pos = index;
         let current_len = self.len as usize;
 
         // Shift keys and values to make room
@@ -215,35 +230,13 @@ where
 
     /// Get a value by key.
     pub fn get(&self, key: &K) -> Option<&V> {
-        if self.len == 0 {
-            return None;
+        let (index, found) = self.find_key_index(key);
+        
+        if found {
+            Some(unsafe { self.value_at(index) })
+        } else {
+            None
         }
-
-        // Binary search through the keys
-        let mut left = 0;
-        let mut right = self.len as usize;
-
-        while left < right {
-            let mid = left + (right - left) / 2;
-            
-            // Safety: mid is always < self.len due to binary search bounds
-            let mid_key = unsafe { self.key_at(mid) };
-            
-            match mid_key.cmp(key) {
-                std::cmp::Ordering::Equal => {
-                    // Found the key, return corresponding value
-                    return Some(unsafe { self.value_at(mid) });
-                }
-                std::cmp::Ordering::Less => {
-                    left = mid + 1;
-                }
-                std::cmp::Ordering::Greater => {
-                    right = mid;
-                }
-            }
-        }
-
-        None // Key not found
     }
 
     /// Remove a key-value pair from the leaf.
@@ -551,6 +544,38 @@ mod tests {
         
         assert_eq!(leaf.get(&i32::MIN), Some(&-2000));
         assert_eq!(leaf.get(&i32::MAX), Some(&2000));
+    }
+
+    #[test]
+    fn test_find_key_index_helper() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(10);
+        
+        // Test empty leaf
+        assert_eq!(leaf.find_key_index(&42), (0, false));
+        
+        // Manually set up data: keys [10, 20, 30]
+        leaf.len = 3;
+        unsafe {
+            leaf.set_key_at(0, 10);
+            leaf.set_key_at(1, 20);
+            leaf.set_key_at(2, 30);
+        }
+        
+        // Test exact matches
+        assert_eq!(leaf.find_key_index(&10), (0, true));
+        assert_eq!(leaf.find_key_index(&20), (1, true));
+        assert_eq!(leaf.find_key_index(&30), (2, true));
+        
+        // Test insertion points for missing keys
+        assert_eq!(leaf.find_key_index(&5), (0, false));   // Before first
+        assert_eq!(leaf.find_key_index(&15), (1, false));  // Between 10 and 20
+        assert_eq!(leaf.find_key_index(&25), (2, false));  // Between 20 and 30
+        assert_eq!(leaf.find_key_index(&35), (3, false));  // After last
+        
+        // Test boundary cases
+        assert_eq!(leaf.find_key_index(&9), (0, false));
+        assert_eq!(leaf.find_key_index(&11), (1, false));
+        assert_eq!(leaf.find_key_index(&31), (3, false));
     }
 
     // Phase 6: Remove Tests (will fail until implemented)
