@@ -19,15 +19,15 @@ use crate::types::{NodeId, InsertResult, SplitNodeData};
 #[repr(C, align(64))]
 pub struct CompressedLeafNode<K, V> {
     /// Maximum number of key-value pairs this node can hold
-    capacity: u16,
+    capacity: usize,
     /// Current number of key-value pairs
-    len: u16,
+    len: usize,
     /// Next leaf node in the linked list (for range queries)
     next: NodeId,
     /// Phantom data to maintain type parameters (zero-sized)
     _phantom: PhantomData<(K, V)>,
     /// Raw storage for keys and values
-    data: [u8; 248],
+    data: [u8; 236], // Adjusted for actual layout: 256 - 20 = 236
 }
 
 impl<K, V> CompressedLeafNode<K, V>
@@ -42,38 +42,26 @@ where
     /// 
     /// # Returns
     /// A new empty compressed leaf node
-    pub fn new(capacity: u16) -> Self {
+    pub fn new(capacity: usize) -> Self {
         Self {
             capacity,
             len: 0,
             next: crate::types::NULL_NODE,
             _phantom: PhantomData,
-            data: [0; 248],
+            data: [0; 236],
         }
-    }
-
-    /// Create a new empty compressed leaf node with usize capacity (for compatibility).
-    /// 
-    /// # Arguments
-    /// * `capacity` - Maximum number of key-value pairs (will be clamped to u16::MAX)
-    /// 
-    /// # Returns
-    /// A new empty compressed leaf node
-    pub fn new_with_usize_capacity(capacity: usize) -> Self {
-        let clamped_capacity = capacity.min(u16::MAX as usize) as u16;
-        Self::new(clamped_capacity)
     }
 
     /// Returns the number of key-value pairs in this leaf.
     #[inline]
     pub fn len(&self) -> usize {
-        self.len as usize
+        self.len
     }
 
     /// Returns the maximum capacity of this leaf.
     #[inline]
     pub fn capacity(&self) -> usize {
-        self.capacity as usize
+        self.capacity
     }
 
     /// Returns true if this leaf is empty.
@@ -89,10 +77,10 @@ where
     }
 
     /// Calculate the maximum number of key-value pairs that can fit in the available space.
-    pub fn calculate_max_capacity() -> u16 {
+    pub fn calculate_max_capacity() -> usize {
         let pair_size = mem::size_of::<K>() + mem::size_of::<V>();
-        let available_space = 248; // data array size
-        (available_space / pair_size) as u16
+        let available_space = 236; // data array size
+        available_space / pair_size
     }
 
     /// Get a pointer to the keys region in the data array.
@@ -303,8 +291,8 @@ where
 
         // Calculate how many keys go to the right node
         let right_count = total_keys - mid;
-        new_right.len = right_count as u16;
-        
+        new_right.len = right_count;
+
         // Copy keys and values to the right node
         unsafe {
             // Copy keys
@@ -330,8 +318,8 @@ where
         self.next = crate::types::NULL_NODE;
         
         // Update this node's length
-        self.len = mid as u16;
-        
+        self.len = mid;
+
         new_right
     }
 
@@ -438,6 +426,49 @@ where
     /// Set the next node ID in the linked list.
     pub fn set_next(&mut self, next: NodeId) {
         self.next = next;
+    }
+
+    /// Get a reference to all keys as a Vec (LeafNode compatibility method).
+    /// 
+    /// Note: This creates a new Vec by copying all keys from the compressed storage.
+    /// For better performance, consider using keys_iter() instead.
+    pub fn keys(&self) -> Vec<K> {
+        let mut keys = Vec::with_capacity(self.len);
+        for i in 0..self.len {
+            unsafe {
+                keys.push(*self.key_at(i));
+            }
+        }
+        keys
+    }
+
+    /// Get a reference to all values as a Vec (LeafNode compatibility method).
+    /// 
+    /// Note: This creates a new Vec by copying all values from the compressed storage.
+    /// For better performance, consider using values_iter() instead.
+    pub fn values(&self) -> Vec<V> {
+        let mut values = Vec::with_capacity(self.len);
+        for i in 0..self.len {
+            unsafe {
+                values.push(*self.value_at(i));
+            }
+        }
+        values
+    }
+
+    /// Get a mutable reference to all values as a Vec (LeafNode compatibility method).
+    /// 
+    /// Note: This creates a new Vec by copying all values from the compressed storage.
+    /// Changes to the returned Vec will not affect the original node.
+    /// For in-place modifications, use get_mut() or values_iter_mut().
+    pub fn values_mut(&mut self) -> Vec<V> {
+        let mut values = Vec::with_capacity(self.len);
+        for i in 0..self.len {
+            unsafe {
+                values.push(*self.value_at(i));
+            }
+        }
+        values
     }
 
     /// Check if this leaf needs to be split (LeafNode compatibility method).
@@ -793,6 +824,59 @@ where
     }
 }
 
+impl<K, V> PartialEq for CompressedLeafNode<K, V>
+where
+    K: Copy + Ord + PartialEq,
+    V: Copy + PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        if self.len != other.len || self.capacity != other.capacity {
+            return false;
+        }
+        
+        // Compare all key-value pairs
+        for i in 0..self.len {
+            unsafe {
+                if *self.key_at(i) != *other.key_at(i) || *self.value_at(i) != *other.value_at(i) {
+                    return false;
+                }
+            }
+        }
+        
+        true
+    }
+}
+
+impl<K, V> Eq for CompressedLeafNode<K, V>
+where
+    K: Copy + Ord + Eq,
+    V: Copy + Eq,
+{
+}
+
+impl<K, V> From<crate::types::LeafNode<K, V>> for CompressedLeafNode<K, V>
+where
+    K: Copy + Ord,
+    V: Copy,
+{
+    /// Convert a LeafNode to a CompressedLeafNode.
+    /// 
+    /// This conversion copies all key-value pairs from the LeafNode's Vec storage
+    /// into the CompressedLeafNode's compact array storage.
+    fn from(leaf: crate::types::LeafNode<K, V>) -> Self {
+        let capacity = leaf.capacity.min(Self::calculate_max_capacity());
+        let mut compressed = Self::new(capacity);
+        
+        // Copy all key-value pairs
+        for (key, value) in leaf.keys.into_iter().zip(leaf.values.into_iter()) {
+            let _ = compressed.insert(key, value); // Should never fail since we're within capacity
+        }
+        
+        compressed.next = leaf.next;
+        compressed
+    }
+}
+
 /// Iterator over key-value pairs in a compressed leaf node.
 pub struct CompressedLeafIter<'a, K, V> {
     node: &'a CompressedLeafNode<K, V>,
@@ -869,10 +953,10 @@ mod tests {
         
         // Print actual field offsets for debugging
         let capacity_offset = unsafe { 
-            (&leaf.capacity as *const u16 as *const u8).offset_from(start_ptr) 
+            (&leaf.capacity as *const usize as *const u8).offset_from(start_ptr) 
         };
         let len_offset = unsafe { 
-            (&leaf.len as *const u16 as *const u8).offset_from(start_ptr) 
+            (&leaf.len as *const usize as *const u8).offset_from(start_ptr) 
         };
         let next_offset = unsafe { 
             (&leaf.next as *const u32 as *const u8).offset_from(start_ptr) 
@@ -892,13 +976,13 @@ mod tests {
         println!("  data: {}", data_offset);
         
         assert_eq!(capacity_offset, 0);
-        assert_eq!(len_offset, 2);
-        assert_eq!(next_offset, 4);
-        assert_eq!(phantom_offset, 8);
-        assert_eq!(data_offset, 8); // PhantomData is zero-sized
+        assert_eq!(len_offset, 8);  // usize is 8 bytes
+        assert_eq!(next_offset, 16); // after two usize fields
+        assert_eq!(phantom_offset, 20); // after NodeId (u32)
+        assert_eq!(data_offset, 20); // PhantomData is zero-sized, starts at same offset
 
         // Verify data array ends at struct boundary
-        let data_end = unsafe { leaf.data.as_ptr().add(248) };
+        let data_end = unsafe { leaf.data.as_ptr().add(236) };
         assert_eq!(data_end as *const u8, end_ptr);
     }
 
@@ -909,6 +993,124 @@ mod tests {
         
         // Should be aligned to 64-byte boundary
         assert_eq!(addr % 64, 0);
+    }
+
+    #[test]
+    fn test_leafnode_compatibility_methods() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(10);
+        
+        // Test keys() method
+        assert_eq!(leaf.keys(), Vec::<i32>::new());
+        
+        // Test values() method
+        assert_eq!(leaf.values(), Vec::<i32>::new());
+        
+        // Test values_mut() method
+        assert_eq!(leaf.values_mut(), Vec::<i32>::new());
+        
+        // Add some data
+        leaf.insert(1, 100);
+        leaf.insert(2, 200);
+        leaf.insert(3, 300);
+        
+        // Test with data
+        assert_eq!(leaf.keys(), vec![1, 2, 3]);
+        assert_eq!(leaf.values(), vec![100, 200, 300]);
+        assert_eq!(leaf.values_mut(), vec![100, 200, 300]);
+    }
+
+    #[test]
+    fn test_partial_eq_trait() {
+        let mut leaf1 = CompressedLeafNode::<i32, i32>::new(10);
+        let mut leaf2 = CompressedLeafNode::<i32, i32>::new(10);
+        
+        // Empty nodes should be equal
+        assert_eq!(leaf1, leaf2);
+        
+        // Add same data to both
+        leaf1.insert(1, 100);
+        leaf1.insert(2, 200);
+        leaf2.insert(1, 100);
+        leaf2.insert(2, 200);
+        
+        assert_eq!(leaf1, leaf2);
+        
+        // Different data should not be equal
+        leaf2.insert(3, 300);
+        assert_ne!(leaf1, leaf2);
+        
+        // Different capacity should not be equal
+        let leaf3 = CompressedLeafNode::<i32, i32>::new(20);
+        assert_ne!(leaf1, leaf3);
+    }
+
+    #[test]
+    fn test_from_leafnode_conversion() {
+        use crate::types::LeafNode;
+        
+        // Create a regular LeafNode
+        let regular_leaf = LeafNode {
+            capacity: 10,
+            keys: vec![1, 2, 3],
+            values: vec![100, 200, 300],
+            next: 42,
+        };
+        
+        // Convert to CompressedLeafNode
+        let compressed_leaf = CompressedLeafNode::from(regular_leaf);
+        
+        // Verify the conversion
+        assert_eq!(compressed_leaf.len(), 3);
+        assert_eq!(compressed_leaf.capacity(), 10);
+        assert_eq!(compressed_leaf.next(), 42);
+        assert_eq!(compressed_leaf.get(&1), Some(&100));
+        assert_eq!(compressed_leaf.get(&2), Some(&200));
+        assert_eq!(compressed_leaf.get(&3), Some(&300));
+        assert_eq!(compressed_leaf.keys(), vec![1, 2, 3]);
+        assert_eq!(compressed_leaf.values(), vec![100, 200, 300]);
+    }
+
+    #[test]
+    fn test_default_trait() {
+        let leaf = CompressedLeafNode::<i32, i32>::default();
+        assert_eq!(leaf.capacity(), 16);
+        assert_eq!(leaf.len(), 0);
+        assert!(leaf.is_empty());
+    }
+
+    #[test]
+    fn test_improved_leafnode_compatibility() {
+        use crate::types::LeafNode;
+        
+        // Create both types of nodes
+        let mut regular_leaf = LeafNode {
+            capacity: 10,
+            keys: vec![1, 3, 5],
+            values: vec![10, 30, 50],
+            next: crate::types::NULL_NODE,
+        };
+        
+        let mut compressed_leaf = CompressedLeafNode::<i32, i32>::new(10);
+        compressed_leaf.insert(1, 10);
+        compressed_leaf.insert(3, 30);
+        compressed_leaf.insert(5, 50);
+        
+        // Both should have the same interface for common operations
+        assert_eq!(regular_leaf.len(), compressed_leaf.len());
+        assert_eq!(regular_leaf.get(&3), compressed_leaf.get(&3));
+        assert_eq!(*regular_leaf.keys(), compressed_leaf.keys());
+        assert_eq!(*regular_leaf.values(), compressed_leaf.values());
+
+        // Both should support the same mutation operations
+        assert_eq!(regular_leaf.get_mut(&3), compressed_leaf.get_mut(&3));
+        
+        // Both should support the same structural operations
+        assert_eq!(regular_leaf.is_empty(), compressed_leaf.is_empty());
+        assert_eq!(regular_leaf.is_full(), compressed_leaf.is_full());
+        
+        // Conversion should work seamlessly
+        let converted = CompressedLeafNode::from(regular_leaf);
+        assert_eq!(converted, compressed_leaf);
     }
 
     // Phase 2: Basic Construction Tests
@@ -927,19 +1129,19 @@ mod tests {
         let max_cap = CompressedLeafNode::<i32, i32>::calculate_max_capacity();
         
         // i32 + i32 = 8 bytes per pair
-        // 248 bytes available / 8 bytes per pair = 31 pairs
-        assert_eq!(max_cap, 31);
+        // 236 bytes available / 8 bytes per pair = 29 pairs
+        assert_eq!(max_cap, 29);
     }
 
     #[test]
     fn calculate_max_capacity_for_different_types() {
         // u8 + u8 = 2 bytes per pair
         let u8_cap = CompressedLeafNode::<u8, u8>::calculate_max_capacity();
-        assert_eq!(u8_cap, 124); // 248 / 2 = 124
+        assert_eq!(u8_cap, 118); // 236 / 2 = 118
 
         // u64 + u64 = 16 bytes per pair  
         let u64_cap = CompressedLeafNode::<u64, u64>::calculate_max_capacity();
-        assert_eq!(u64_cap, 15); // 248 / 16 = 15
+        assert_eq!(u64_cap, 14); // 236 / 16 = 14
     }
 
     // Phase 3: Single Insert/Get Tests (will fail until implemented)
@@ -2276,21 +2478,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_new_with_usize_capacity() {
-        // Test normal capacity
-        let leaf1 = CompressedLeafNode::<i32, i32>::new_with_usize_capacity(16);
-        assert_eq!(leaf1.capacity(), 16);
-        
-        // Test capacity clamping
-        let leaf2 = CompressedLeafNode::<i32, i32>::new_with_usize_capacity(100000);
-        assert_eq!(leaf2.capacity(), u16::MAX as usize);
-        
-        // Test zero capacity
-        let leaf3 = CompressedLeafNode::<i32, i32>::new_with_usize_capacity(0);
-        assert_eq!(leaf3.capacity(), 0);
-    }
-
+    
     // Phase 11: External Code Compatibility Demonstration
 
     #[test]
