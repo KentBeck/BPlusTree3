@@ -146,8 +146,71 @@ where
     V: Copy,
 {
     /// Insert a key-value pair into the leaf.
+    /// Returns Ok(Some(old_value)) if key existed, Ok(None) if new key, Err if full.
     pub fn insert(&mut self, key: K, value: V) -> Result<Option<V>, &'static str> {
-        todo!("Implement through TDD")
+        // Check if we have space (unless it's an update)
+        if self.len >= self.capacity {
+            // Check if this is an update to existing key
+            if self.get(&key).is_none() {
+                return Err("Leaf is at capacity");
+            }
+        }
+
+        // Binary search to find insertion point
+        let mut left = 0;
+        let mut right = self.len as usize;
+
+        while left < right {
+            let mid = left + (right - left) / 2;
+            
+            // Safety: mid is always < self.len due to binary search bounds
+            let mid_key = unsafe { self.key_at(mid) };
+            
+            match mid_key.cmp(&key) {
+                std::cmp::Ordering::Equal => {
+                    // Key exists - update value and return old value
+                    let old_value = unsafe { *self.value_at(mid) };
+                    unsafe { self.set_value_at(mid, value) };
+                    return Ok(Some(old_value));
+                }
+                std::cmp::Ordering::Less => {
+                    left = mid + 1;
+                }
+                std::cmp::Ordering::Greater => {
+                    right = mid;
+                }
+            }
+        }
+
+        // Key doesn't exist - insert at position 'left'
+        let insert_pos = left;
+        let current_len = self.len as usize;
+
+        // Shift keys and values to make room
+        if insert_pos < current_len {
+            unsafe {
+                // Shift keys right
+                let keys_src = self.keys_ptr().add(insert_pos);
+                let keys_dst = self.keys_ptr_mut().add(insert_pos + 1);
+                std::ptr::copy(keys_src, keys_dst, current_len - insert_pos);
+
+                // Shift values right
+                let values_src = self.values_ptr().add(insert_pos);
+                let values_dst = self.values_ptr_mut().add(insert_pos + 1);
+                std::ptr::copy(values_src, values_dst, current_len - insert_pos);
+            }
+        }
+
+        // Insert new key-value pair
+        unsafe {
+            self.set_key_at(insert_pos, key);
+            self.set_value_at(insert_pos, value);
+        }
+
+        // Increment length
+        self.len += 1;
+
+        Ok(None) // New key inserted
     }
 
     /// Get a value by key.
@@ -312,7 +375,6 @@ mod tests {
     // Phase 3: Single Insert/Get Tests (will fail until implemented)
 
     #[test]
-    #[should_panic] // Remove this when implementing
     fn insert_single_item() {
         let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
         assert!(leaf.insert(42, 100).is_ok());
@@ -383,7 +445,6 @@ mod tests {
     // Phase 4: Multiple Insert Tests (will fail until implemented)
 
     #[test]
-    #[should_panic] // Remove this when implementing
     fn insert_multiple_sorted() {
         let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
         for i in 0..5 {
@@ -397,10 +458,50 @@ mod tests {
         }
     }
 
+    #[test]
+    fn insert_multiple_unsorted() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        let keys = [5, 1, 8, 3, 7];
+        
+        for &key in &keys {
+            assert!(leaf.insert(key, key * 10).is_ok());
+        }
+        assert_eq!(leaf.len(), 5);
+        
+        // Verify all accessible and sorted internally
+        for &key in &keys {
+            assert_eq!(leaf.get(&key), Some(&(key * 10)));
+        }
+        
+        // Verify they're stored in sorted order by checking sequential access
+        // Keys should be internally sorted as: [1, 3, 5, 7, 8]
+        unsafe {
+            assert_eq!(*leaf.key_at(0), 1);
+            assert_eq!(*leaf.key_at(1), 3);
+            assert_eq!(*leaf.key_at(2), 5);
+            assert_eq!(*leaf.key_at(3), 7);
+            assert_eq!(*leaf.key_at(4), 8);
+        }
+    }
+
+    #[test]
+    fn insert_duplicate_keys() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        
+        // Insert initial value
+        assert!(leaf.insert(42, 100).is_ok());
+        assert_eq!(leaf.len(), 1);
+        assert_eq!(leaf.get(&42), Some(&100));
+        
+        // Insert same key with different value (should update)
+        assert!(leaf.insert(42, 200).is_ok());
+        assert_eq!(leaf.len(), 1); // Length shouldn't change
+        assert_eq!(leaf.get(&42), Some(&200)); // Value should be updated
+    }
+
     // Phase 5: Capacity Management Tests (will fail until implemented)
 
     #[test]
-    #[should_panic] // Remove this when implementing
     fn insert_at_capacity() {
         let mut leaf = CompressedLeafNode::<i32, i32>::new(4);
         
@@ -412,6 +513,44 @@ mod tests {
         
         // Attempt overflow
         assert!(leaf.insert(99, 990).is_err());
+    }
+
+    #[test]
+    fn insert_comprehensive_edge_cases() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(10);
+        
+        // Test inserting at boundaries
+        assert!(leaf.insert(i32::MIN, -1000).is_ok());
+        assert!(leaf.insert(i32::MAX, 1000).is_ok());
+        assert!(leaf.insert(0, 0).is_ok());
+        assert_eq!(leaf.len(), 3);
+        
+        // Verify they're accessible
+        assert_eq!(leaf.get(&i32::MIN), Some(&-1000));
+        assert_eq!(leaf.get(&i32::MAX), Some(&1000));
+        assert_eq!(leaf.get(&0), Some(&0));
+        
+        // Insert some values in between
+        assert!(leaf.insert(-100, -100).is_ok());
+        assert!(leaf.insert(100, 100).is_ok());
+        assert_eq!(leaf.len(), 5);
+        
+        // Verify sorted order is maintained
+        unsafe {
+            assert_eq!(*leaf.key_at(0), i32::MIN);
+            assert_eq!(*leaf.key_at(1), -100);
+            assert_eq!(*leaf.key_at(2), 0);
+            assert_eq!(*leaf.key_at(3), 100);
+            assert_eq!(*leaf.key_at(4), i32::MAX);
+        }
+        
+        // Test updating boundary values
+        assert!(leaf.insert(i32::MIN, -2000).is_ok());
+        assert!(leaf.insert(i32::MAX, 2000).is_ok());
+        assert_eq!(leaf.len(), 5); // Length shouldn't change
+        
+        assert_eq!(leaf.get(&i32::MIN), Some(&-2000));
+        assert_eq!(leaf.get(&i32::MAX), Some(&2000));
     }
 
     // Phase 6: Remove Tests (will fail until implemented)
