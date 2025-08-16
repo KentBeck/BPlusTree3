@@ -60,6 +60,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Recursively remove a key with proper arena access.
+    #[inline]
     fn remove_recursive(&mut self, node: &NodeRef<K, V>, key: &K) -> RemoveResult<V> {
         match node {
             NodeRef::Leaf(id, _) => {
@@ -148,12 +149,14 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Helper method to create empty root leaf
+    #[inline]
     fn create_empty_root_leaf(&mut self) {
         let empty_id = self.allocate_leaf(LeafNode::new(self.capacity));
         self.root = NodeRef::Leaf(empty_id, PhantomData);
     }
 
     /// Helper to check if a node is underfull.
+    #[inline]
     fn is_node_underfull(&self, node_ref: &NodeRef<K, V>) -> bool {
         match node_ref {
             NodeRef::Leaf(id, _) => self
@@ -168,6 +171,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Helper to check if a node can donate
+    #[inline]
     fn can_node_donate(&self, node_ref: &NodeRef<K, V>) -> bool {
         match node_ref {
             NodeRef::Leaf(id, _) => self
@@ -207,6 +211,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Rebalance an underfull child in an arena branch
+    #[inline]
     fn rebalance_child(&mut self, branch_id: NodeId, child_index: usize) -> bool {
         // Get information about the child and its siblings
         let (has_left_sibling, has_right_sibling, child_is_leaf) = match self.get_branch(branch_id)

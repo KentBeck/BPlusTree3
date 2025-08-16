@@ -53,6 +53,7 @@ impl<T> CompactArena<T> {
     }
 
     /// Allocate a new item in the arena and return its ID
+    #[inline]
     pub fn allocate(&mut self, item: T) -> NodeId {
         self.generation = self.generation.wrapping_add(1);
         
@@ -73,6 +74,7 @@ impl<T> CompactArena<T> {
     }
 
     /// Deallocate an item from the arena and return it (requires Default)
+    #[inline]
     pub fn deallocate(&mut self, id: NodeId) -> Option<T> 
     where T: Default {
         if id == NULL_NODE {
@@ -115,6 +117,7 @@ impl<T> CompactArena<T> {
     }
 
     /// Get a reference to an item in the arena
+    #[inline]
     pub fn get(&self, id: NodeId) -> Option<&T> {
         if id == NULL_NODE {
             return None;
@@ -132,6 +135,7 @@ impl<T> CompactArena<T> {
     }
 
     /// Get a mutable reference to an item in the arena
+    #[inline]
     pub fn get_mut(&mut self, id: NodeId) -> Option<&mut T> {
         if id == NULL_NODE {
             return None;
@@ -370,21 +374,25 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ============================================================================
 
     /// Allocate a new leaf node in the arena and return its ID.
+    #[inline]
     pub fn allocate_leaf(&mut self, leaf: LeafNode<K, V>) -> NodeId {
         self.leaf_arena.allocate(leaf)
     }
 
     /// Allocate a new branch node in the arena and return its ID.
+    #[inline]
     pub fn allocate_branch(&mut self, branch: BranchNode<K, V>) -> NodeId {
         self.branch_arena.allocate(branch)
     }
 
     /// Deallocate a leaf node from the arena.
+    #[inline]
     pub fn deallocate_leaf(&mut self, id: NodeId) -> Option<LeafNode<K, V>> {
         self.leaf_arena.deallocate(id)
     }
 
     /// Deallocate a branch node from the arena.
+    #[inline]
     pub fn deallocate_branch(&mut self, id: NodeId) -> Option<BranchNode<K, V>> {
         self.branch_arena.deallocate(id)
     }

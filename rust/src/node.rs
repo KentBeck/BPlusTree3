@@ -16,6 +16,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     // ============================================================================
 
     /// Get a value by key from this leaf node.
+    #[inline]
     pub fn get(&self, key: &K) -> Option<&V> {
         self.keys
             .binary_search(key)
@@ -24,6 +25,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     }
 
     /// Get a mutable reference to a value by key from this leaf node.
+    #[inline]
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
         self.keys
             .binary_search(key)
@@ -32,6 +34,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     }
 
     /// Returns the number of key-value pairs in this leaf.
+    #[inline]
     pub fn len(&self) -> usize {
         self.keys.len()
     }
@@ -140,6 +143,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
 
     /// Remove a key-value pair from this leaf node.
     /// Returns the removed value if the key existed, and whether the node is now underfull.
+    #[inline]
     pub fn remove(&mut self, key: &K) -> (Option<V>, bool) {
         match self.keys.binary_search(key) {
             Ok(index) => {
@@ -173,11 +177,13 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     }
 
     /// Returns true if this leaf node is underfull (below minimum occupancy).
+    #[inline]
     pub fn is_underfull(&self) -> bool {
         self.keys.len() < self.min_keys()
     }
 
     /// Returns true if this leaf can donate a key to a sibling.
+    #[inline]
     pub fn can_donate(&self) -> bool {
         self.keys.len() > self.min_keys()
     }
@@ -187,6 +193,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     // ============================================================================
 
     /// Returns the minimum number of keys this leaf should have.
+    #[inline]
     pub fn min_keys(&self) -> usize {
         // For leaf nodes, minimum is floor(capacity / 2)
         // Exception: root can have fewer keys
@@ -330,11 +337,13 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     }
 
     /// Returns true if this branch node is underfull (below minimum occupancy).
+    #[inline]
     pub fn is_underfull(&self) -> bool {
         self.keys.len() < self.min_keys()
     }
 
     /// Returns true if this branch can donate a key to a sibling.
+    #[inline]
     pub fn can_donate(&self) -> bool {
         self.keys.len() > self.min_keys()
     }
@@ -344,6 +353,7 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     // ============================================================================
 
     /// Returns the minimum number of keys this branch should have.
+    #[inline]
     pub fn min_keys(&self) -> usize {
         // For branch nodes, minimum is floor(capacity / 2)
         // Exception: root can have fewer keys
@@ -351,6 +361,7 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     }
 
     /// Find the index of the child that should contain the given key.
+    #[inline]
     pub fn find_child_index(&self, key: &K) -> usize {
         // Binary search to find the appropriate child
         match self.keys.binary_search(key) {
@@ -371,6 +382,7 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     }
 
     /// Get the child node for a given key.
+    #[inline]
     pub fn get_child(&self, key: &K) -> Option<&NodeRef<K, V>> {
         let child_index = self.find_child_index(key);
         if child_index < self.children.len() {

@@ -206,6 +206,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ============================================================================
 
     /// Recursively search for a key in the tree.
+    #[inline]
     fn get_recursive<'a>(&'a self, node: &'a NodeRef<K, V>, key: &K) -> Option<&'a V> {
         match node {
             NodeRef::Leaf(id, _) => self.get_leaf(*id).and_then(|leaf| leaf.get(key)),
@@ -228,6 +229,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Helper to get child info for a key in a branch.
+    #[inline]
     pub fn get_child_for_key(&self, branch_id: NodeId, key: &K) -> Option<(usize, NodeRef<K, V>)> {
         let branch = self.get_branch(branch_id)?;
         let child_index = branch.find_child_index(key);
@@ -243,11 +245,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ============================================================================
 
     /// Get a reference to a leaf node in the arena.
+    #[inline]
     pub fn get_leaf(&self, id: NodeId) -> Option<&LeafNode<K, V>> {
         self.leaf_arena.get(id)
     }
 
     /// Get a mutable reference to a leaf node in the arena.
+    #[inline]
     pub fn get_leaf_mut(&mut self, id: NodeId) -> Option<&mut LeafNode<K, V>> {
         self.leaf_arena.get_mut(id)
     }
@@ -264,11 +268,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Get a reference to a branch node in the arena.
+    #[inline]
     pub fn get_branch(&self, id: NodeId) -> Option<&BranchNode<K, V>> {
         self.branch_arena.get(id)
     }
 
     /// Get a mutable reference to a branch node in the arena.
+    #[inline]
     pub fn get_branch_mut(&mut self, id: NodeId) -> Option<&mut BranchNode<K, V>> {
         self.branch_arena.get_mut(id)
     }
