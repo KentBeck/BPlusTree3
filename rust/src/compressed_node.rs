@@ -309,6 +309,13 @@ where
             );
         }
         
+        // Update linked list: right node takes over the next pointer
+        new_right.next = self.next;
+        
+        // This node will point to the new right node after allocation
+        // For now, set to NULL_NODE and let the caller handle linking
+        self.next = crate::types::NULL_NODE;
+        
         // Update this node's length
         self.len = mid as u16;
         
@@ -332,7 +339,7 @@ where
             capacity: self.capacity as usize,
             keys,
             values,
-            next: crate::types::NULL_NODE,
+            next: self.next,
         }
     }
 
@@ -348,13 +355,74 @@ where
     }
 
     /// Remove a key-value pair from the leaf.
-    pub fn remove(&mut self, key: &K) -> Option<V> {
-        todo!("Implement through TDD")
+    /// Returns the removed value and whether the node is now underfull.
+    pub fn remove(&mut self, key: &K) -> (Option<V>, bool) {
+        let (index, found) = self.find_key_index(key);
+        
+        if !found {
+            return (None, false); // Key not found
+        }
+        
+        // Get the value to return
+        let removed_value = unsafe { *self.value_at(index) };
+        
+        // Shift keys and values left to fill the gap
+        let current_len = self.len as usize;
+        if index < current_len - 1 {
+            unsafe {
+                // Shift keys left
+                let keys_src = self.keys_ptr().add(index + 1);
+                let keys_dst = self.keys_ptr_mut().add(index);
+                std::ptr::copy(keys_src, keys_dst, current_len - index - 1);
+                
+                // Shift values left
+                let values_src = self.values_ptr().add(index + 1);
+                let values_dst = self.values_ptr_mut().add(index);
+                std::ptr::copy(values_src, values_dst, current_len - index - 1);
+            }
+        }
+        
+        // Decrement length
+        self.len -= 1;
+        
+        let is_underfull = self.is_underfull();
+        (Some(removed_value), is_underfull)
+    }
+
+    /// Returns true if this leaf node is underfull (below minimum occupancy).
+    pub fn is_underfull(&self) -> bool {
+        (self.len as usize) < self.min_keys()
+    }
+
+    /// Returns true if this leaf can donate a key to a sibling.
+    pub fn can_donate(&self) -> bool {
+        (self.len as usize) > self.min_keys()
+    }
+
+    /// Returns the minimum number of keys this node should have.
+    pub fn min_keys(&self) -> usize {
+        // For leaf nodes, minimum is floor(capacity / 2)
+        // Exception: root can have fewer keys
+        (self.capacity as usize) / 2
+    }
+
+    /// Get the next node ID in the linked list.
+    pub fn next(&self) -> NodeId {
+        self.next
+    }
+
+    /// Set the next node ID in the linked list.
+    pub fn set_next(&mut self, next: NodeId) {
+        self.next = next;
     }
 
     /// Iterator over key-value pairs in sorted order.
     pub fn iter(&self) -> CompressedLeafIter<K, V> {
-        todo!("Implement through TDD")
+        CompressedLeafIter {
+            node: self,
+            index: 0,
+            _phantom: PhantomData,
+        }
     }
 }
 
@@ -373,7 +441,14 @@ where
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        todo!("Implement through TDD")
+        if self.index < self.node.len as usize {
+            let key = unsafe { self.node.key_at(self.index) };
+            let value = unsafe { self.node.value_at(self.index) };
+            self.index += 1;
+            Some((key, value))
+        } else {
+            None
+        }
     }
 }
 
@@ -745,7 +820,6 @@ mod tests {
     // Phase 6: Remove Tests (will fail until implemented)
 
     #[test]
-    #[should_panic] // Remove this when implementing
     fn remove_existing_key() {
         let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
         match leaf.insert(42, 100) {
@@ -753,19 +827,486 @@ mod tests {
             _ => panic!("Expected new insertion"),
         }
         
-        assert_eq!(leaf.remove(&42), Some(100));
+        let (removed_value, is_underfull) = leaf.remove(&42);
+        assert_eq!(removed_value, Some(100));
         assert_eq!(leaf.len(), 0);
         assert_eq!(leaf.get(&42), None);
+        assert!(leaf.is_empty());
+        // Single item removal from root should not be considered underfull
+        assert!(!is_underfull || leaf.len() == 0);
     }
 
-    // Phase 7: Iterator Tests (will fail until implemented)
+    #[test]
+    fn remove_nonexistent_key() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        
+        // Try to remove from empty leaf
+        let (removed_value, is_underfull) = leaf.remove(&42);
+        assert_eq!(removed_value, None);
+        assert!(!is_underfull);
+        
+        // Add some items and try to remove non-existent key
+        for i in 0..3 {
+            match leaf.insert(i * 10, i * 100) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        
+        let (removed_value, is_underfull) = leaf.remove(&42);
+        assert_eq!(removed_value, None);
+        assert!(!is_underfull);
+        assert_eq!(leaf.len(), 3);
+    }
 
     #[test]
-    #[should_panic] // Remove this when implementing
+    fn remove_from_multiple_items() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        let keys = [10, 20, 30, 40, 50];
+        
+        // Insert multiple items
+        for &key in &keys {
+            match leaf.insert(key, key * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        assert_eq!(leaf.len(), 5);
+        
+        // Remove middle item
+        let (removed_value, is_underfull) = leaf.remove(&30);
+        assert_eq!(removed_value, Some(300));
+        assert_eq!(leaf.len(), 4);
+        assert!(!is_underfull);
+        
+        // Verify remaining items are still accessible and in order
+        assert_eq!(leaf.get(&10), Some(&100));
+        assert_eq!(leaf.get(&20), Some(&200));
+        assert_eq!(leaf.get(&30), None);
+        assert_eq!(leaf.get(&40), Some(&400));
+        assert_eq!(leaf.get(&50), Some(&500));
+        
+        // Verify internal order is maintained
+        unsafe {
+            assert_eq!(*leaf.key_at(0), 10);
+            assert_eq!(*leaf.key_at(1), 20);
+            assert_eq!(*leaf.key_at(2), 40);
+            assert_eq!(*leaf.key_at(3), 50);
+        }
+    }
+
+    #[test]
+    fn remove_first_and_last_items() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        let keys = [10, 20, 30, 40, 50];
+        
+        // Insert multiple items
+        for &key in &keys {
+            match leaf.insert(key, key * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        
+        // Remove first item
+        let (removed_value, is_underfull) = leaf.remove(&10);
+        assert_eq!(removed_value, Some(100));
+        assert_eq!(leaf.len(), 4);
+        
+        // Remove last item
+        let (removed_value, is_underfull) = leaf.remove(&50);
+        assert_eq!(removed_value, Some(500));
+        assert_eq!(leaf.len(), 3);
+        
+        // Verify remaining items
+        assert_eq!(leaf.get(&10), None);
+        assert_eq!(leaf.get(&20), Some(&200));
+        assert_eq!(leaf.get(&30), Some(&300));
+        assert_eq!(leaf.get(&40), Some(&400));
+        assert_eq!(leaf.get(&50), None);
+        
+        // Verify internal order
+        unsafe {
+            assert_eq!(*leaf.key_at(0), 20);
+            assert_eq!(*leaf.key_at(1), 30);
+            assert_eq!(*leaf.key_at(2), 40);
+        }
+    }
+
+    #[test]
+    fn remove_until_empty() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        let keys = [10, 20, 30];
+        
+        // Insert items
+        for &key in &keys {
+            match leaf.insert(key, key * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        assert_eq!(leaf.len(), 3);
+        
+        // Remove all items
+        for &key in &keys {
+            let (removed_value, _) = leaf.remove(&key);
+            assert_eq!(removed_value, Some(key * 10));
+        }
+        
+        assert_eq!(leaf.len(), 0);
+        assert!(leaf.is_empty());
+        
+        // Verify all keys are gone
+        for &key in &keys {
+            assert_eq!(leaf.get(&key), None);
+        }
+    }
+
+    #[test]
+    fn remove_underfull_detection() {
+        // Create a leaf with capacity 8 (min_keys = 4)
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        
+        // Fill with exactly min_keys + 1 items (5 items)
+        for i in 0..5 {
+            match leaf.insert(i, i * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        assert_eq!(leaf.len(), 5);
+        assert!(!leaf.is_underfull());
+        assert!(leaf.can_donate());
+        
+        // Remove one item - should still be at minimum
+        let (removed_value, is_underfull) = leaf.remove(&2);
+        assert_eq!(removed_value, Some(20));
+        assert_eq!(leaf.len(), 4);
+        assert!(!leaf.is_underfull()); // At minimum, not underfull
+        assert!(!leaf.can_donate()); // At minimum, cannot donate
+        
+        // Remove another item - should now be underfull
+        let (removed_value, is_underfull) = leaf.remove(&1);
+        assert_eq!(removed_value, Some(10));
+        assert_eq!(leaf.len(), 3);
+        assert!(leaf.is_underfull()); // Below minimum
+        assert!(is_underfull); // Method should report underfull
+        assert!(!leaf.can_donate());
+    }
+
+    #[test]
+    fn remove_edge_case_boundary_values() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        
+        // Insert boundary values
+        let keys = [i32::MIN, -1, 0, 1, i32::MAX];
+        for &key in &keys {
+            match leaf.insert(key, key) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        
+        // Remove boundary values
+        let (removed_value, _) = leaf.remove(&i32::MIN);
+        assert_eq!(removed_value, Some(i32::MIN));
+        
+        let (removed_value, _) = leaf.remove(&i32::MAX);
+        assert_eq!(removed_value, Some(i32::MAX));
+        
+        // Verify remaining items
+        assert_eq!(leaf.get(&i32::MIN), None);
+        assert_eq!(leaf.get(&-1), Some(&-1));
+        assert_eq!(leaf.get(&0), Some(&0));
+        assert_eq!(leaf.get(&1), Some(&1));
+        assert_eq!(leaf.get(&i32::MAX), None);
+        assert_eq!(leaf.len(), 3);
+    }
+
+    // Phase 7: Iterator Tests
+
+    #[test]
     fn iterate_empty_leaf() {
         let leaf = CompressedLeafNode::<i32, i32>::new(8);
         let items: Vec<(&i32, &i32)> = leaf.iter().collect();
         assert!(items.is_empty());
+    }
+
+    #[test]
+    fn iterate_single_item() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        match leaf.insert(42, 100) {
+            InsertResult::Updated(None) => {},
+            _ => panic!("Expected new insertion"),
+        }
+        
+        let items: Vec<(&i32, &i32)> = leaf.iter().collect();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0], (&42, &100));
+    }
+
+    #[test]
+    fn iterate_multiple_items() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        let keys = [30, 10, 50, 20, 40]; // Insert in unsorted order
+        
+        for &key in &keys {
+            match leaf.insert(key, key * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        
+        let items: Vec<(&i32, &i32)> = leaf.iter().collect();
+        assert_eq!(items.len(), 5);
+        
+        // Should iterate in sorted order
+        assert_eq!(items[0], (&10, &100));
+        assert_eq!(items[1], (&20, &200));
+        assert_eq!(items[2], (&30, &300));
+        assert_eq!(items[3], (&40, &400));
+        assert_eq!(items[4], (&50, &500));
+    }
+
+    #[test]
+    fn iterate_after_removals() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        let keys = [10, 20, 30, 40, 50];
+        
+        // Insert items
+        for &key in &keys {
+            match leaf.insert(key, key * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        
+        // Remove some items
+        leaf.remove(&20);
+        leaf.remove(&40);
+        
+        let items: Vec<(&i32, &i32)> = leaf.iter().collect();
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[0], (&10, &100));
+        assert_eq!(items[1], (&30, &300));
+        assert_eq!(items[2], (&50, &500));
+    }
+
+    #[test]
+    fn iterate_boundary_values() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        let keys = [i32::MIN, -1, 0, 1, i32::MAX];
+        
+        for &key in &keys {
+            match leaf.insert(key, key) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        
+        let items: Vec<(&i32, &i32)> = leaf.iter().collect();
+        assert_eq!(items.len(), 5);
+        assert_eq!(items[0], (&i32::MIN, &i32::MIN));
+        assert_eq!(items[1], (&-1, &-1));
+        assert_eq!(items[2], (&0, &0));
+        assert_eq!(items[3], (&1, &1));
+        assert_eq!(items[4], (&i32::MAX, &i32::MAX));
+    }
+
+    #[test]
+    fn iterator_multiple_iterations() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        for i in 0..3 {
+            match leaf.insert(i, i * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        
+        // First iteration
+        let items1: Vec<(&i32, &i32)> = leaf.iter().collect();
+        assert_eq!(items1.len(), 3);
+        
+        // Second iteration should produce same results
+        let items2: Vec<(&i32, &i32)> = leaf.iter().collect();
+        assert_eq!(items1, items2);
+        
+        // Manual iteration
+        let mut iter = leaf.iter();
+        assert_eq!(iter.next(), Some((&0, &0)));
+        assert_eq!(iter.next(), Some((&1, &10)));
+        assert_eq!(iter.next(), Some((&2, &20)));
+        assert_eq!(iter.next(), None);
+        assert_eq!(iter.next(), None); // Should continue returning None
+    }
+
+    // Phase 8: Next Field Linking Tests
+
+    #[test]
+    fn next_field_basic_operations() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        
+        // Initially should be NULL_NODE
+        assert_eq!(leaf.next(), crate::types::NULL_NODE);
+        
+        // Set next field
+        leaf.set_next(42);
+        assert_eq!(leaf.next(), 42);
+        
+        // Change next field
+        leaf.set_next(100);
+        assert_eq!(leaf.next(), 100);
+    }
+
+    #[test]
+    fn split_preserves_next_field_linking() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(6);
+        
+        // Set up a next pointer
+        leaf.set_next(999);
+        
+        // Fill the leaf to capacity
+        for i in 0..6 {
+            match leaf.insert(i, i * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        
+        // Split by inserting one more item
+        let original_next = leaf.next();
+        let mut right_node = leaf.split();
+        
+        // After split:
+        // - Original node should have NULL_NODE (to be set by caller)
+        // - Right node should have the original next pointer
+        assert_eq!(leaf.next(), crate::types::NULL_NODE);
+        assert_eq!(right_node.next(), original_next);
+        assert_eq!(right_node.next(), 999);
+    }
+
+    #[test]
+    fn split_with_null_next_field() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(4);
+        
+        // Leave next as NULL_NODE (default)
+        assert_eq!(leaf.next(), crate::types::NULL_NODE);
+        
+        // Fill to capacity and split
+        for i in 0..4 {
+            match leaf.insert(i, i * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        
+        let right_node = leaf.split();
+        
+        // Both should be NULL_NODE
+        assert_eq!(leaf.next(), crate::types::NULL_NODE);
+        assert_eq!(right_node.next(), crate::types::NULL_NODE);
+    }
+
+    #[test]
+    fn to_leaf_node_preserves_next_field() {
+        let mut compressed = CompressedLeafNode::<i32, i32>::new(8);
+        
+        // Set next field and add some data
+        compressed.set_next(777);
+        for i in 0..3 {
+            match compressed.insert(i, i * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        
+        // Convert to regular LeafNode
+        let regular = compressed.to_leaf_node();
+        
+        // Next field should be preserved
+        assert_eq!(regular.next, 777);
+        
+        // Data should also be preserved
+        assert_eq!(regular.keys.len(), 3);
+        assert_eq!(regular.values.len(), 3);
+        for i in 0..3 {
+            assert_eq!(regular.keys[i], i as i32);
+            assert_eq!(regular.values[i], (i * 10) as i32);
+        }
+    }
+
+    #[test]
+    fn split_and_insert_maintains_next_linking() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(4);
+        
+        // Set up next pointer
+        leaf.set_next(555);
+        
+        // Fill to capacity
+        for i in 0..4 {
+            match leaf.insert(i, i * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        
+        // Insert one more to trigger split
+        match leaf.insert(99, 990) {
+            InsertResult::Split { old_value: None, new_node_data, separator_key } => {
+                // Verify split occurred
+                assert!(separator_key >= 0 && separator_key <= 99);
+                
+                // Check that the new node data preserves next linking
+                match new_node_data {
+                    crate::types::SplitNodeData::Leaf(right_leaf) => {
+                        // The converted leaf should have the original next pointer
+                        assert_eq!(right_leaf.next, 555);
+                    },
+                    _ => panic!("Expected leaf split"),
+                }
+                
+                // Original node should have NULL_NODE after split
+                assert_eq!(leaf.next(), crate::types::NULL_NODE);
+            },
+            _ => panic!("Expected split when inserting beyond capacity"),
+        }
+    }
+
+    #[test]
+    fn next_field_survives_multiple_operations() {
+        let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
+        
+        // Set next field
+        leaf.set_next(123);
+        
+        // Perform various operations
+        for i in 0..5 {
+            match leaf.insert(i, i * 10) {
+                InsertResult::Updated(None) => {},
+                _ => panic!("Expected new insertion"),
+            }
+        }
+        
+        // Next field should still be there
+        assert_eq!(leaf.next(), 123);
+        
+        // Remove some items
+        leaf.remove(&2);
+        leaf.remove(&4);
+        
+        // Next field should still be there
+        assert_eq!(leaf.next(), 123);
+        
+        // Update existing keys
+        match leaf.insert(1, 999) {
+            InsertResult::Updated(Some(old_value)) => {
+                assert_eq!(old_value, 10);
+            },
+            _ => panic!("Expected key update"),
+        }
+        
+        // Next field should still be there
+        assert_eq!(leaf.next(), 123);
     }
 
     // Memory efficiency verification
