@@ -5,7 +5,7 @@
 
 use std::marker::PhantomData;
 use std::mem;
-use crate::types::NodeId;
+use crate::types::{NodeId, InsertResult, SplitNodeData};
 
 /// A leaf node compressed to exactly 4 cache lines (256 bytes) for optimal cache performance.
 /// 
@@ -181,20 +181,20 @@ where
     V: Copy,
 {
     /// Insert a key-value pair into the leaf.
-    /// Returns Ok(Some(old_value)) if key existed, Ok(None) if new key, Err if full.
-    pub fn insert(&mut self, key: K, value: V) -> Result<Option<V>, &'static str> {
+    /// Returns InsertResult indicating success, update, or split needed.
+    pub fn insert(&mut self, key: K, value: V) -> InsertResult<K, V> {
         let (index, found) = self.find_key_index(&key);
         
         if found {
             // Key exists - update value and return old value
             let old_value = unsafe { *self.value_at(index) };
             unsafe { self.set_value_at(index, value) };
-            return Ok(Some(old_value));
+            return InsertResult::Updated(Some(old_value));
         }
 
-        // Key doesn't exist - check capacity
+        // Key doesn't exist - check if we need to split
         if self.len >= self.capacity {
-            return Err("Leaf is at capacity");
+            return self.split_and_insert(key, value, index);
         }
 
         // Insert new key at the found position
@@ -225,7 +225,115 @@ where
         // Increment length
         self.len += 1;
 
-        Ok(None) // New key inserted
+        InsertResult::Updated(None) // New key inserted
+    }
+
+    /// Split the node and insert the new key-value pair.
+    fn split_and_insert(&mut self, key: K, value: V, insert_index: usize) -> InsertResult<K, V> {
+        // First, insert the new key-value pair to create an overfull node
+        self.insert_at_index(insert_index, key, value);
+        
+        // Now split the overfull node
+        let new_right = self.split();
+        
+        // Determine the separator key (first key of right node)
+        let separator_key = unsafe { *new_right.key_at(0) };
+        
+        // Convert to regular LeafNode for SplitNodeData
+        let new_right_leaf = new_right.to_leaf_node();
+        
+        InsertResult::Split {
+            old_value: None,
+            new_node_data: SplitNodeData::Leaf(new_right_leaf),
+            separator_key,
+        }
+    }
+
+    /// Insert a key-value pair at the specified index without capacity checks.
+    fn insert_at_index(&mut self, index: usize, key: K, value: V) {
+        let current_len = self.len as usize;
+
+        // Shift keys and values to make room
+        if index < current_len {
+            unsafe {
+                // Shift keys right
+                let keys_src = self.keys_ptr().add(index);
+                let keys_dst = self.keys_ptr_mut().add(index + 1);
+                std::ptr::copy(keys_src, keys_dst, current_len - index);
+
+                // Shift values right
+                let values_src = self.values_ptr().add(index);
+                let values_dst = self.values_ptr_mut().add(index + 1);
+                std::ptr::copy(values_src, values_dst, current_len - index);
+            }
+        }
+
+        // Insert new key-value pair
+        unsafe {
+            self.set_key_at(index, key);
+            self.set_value_at(index, value);
+        }
+
+        // Increment length
+        self.len += 1;
+    }
+
+    /// Split this leaf node, returning the new right node.
+    pub fn split(&mut self) -> CompressedLeafNode<K, V> {
+        let total_keys = self.len as usize;
+        
+        // Calculate split point for better balance
+        let mid = total_keys.div_ceil(2); // Round up for odd numbers
+        
+        // Create new right node with same capacity
+        let mut new_right = CompressedLeafNode::new(self.capacity);
+
+        // Calculate how many keys go to the right node
+        let right_count = total_keys - mid;
+        new_right.len = right_count as u16;
+        
+        // Copy keys and values to the right node
+        unsafe {
+            // Copy keys
+            std::ptr::copy_nonoverlapping(
+                self.keys_ptr().add(mid),
+                new_right.keys_ptr_mut(),
+                right_count,
+            );
+            
+            // Copy values
+            std::ptr::copy_nonoverlapping(
+                self.values_ptr().add(mid),
+                new_right.values_ptr_mut(),
+                right_count,
+            );
+        }
+        
+        // Update this node's length
+        self.len = mid as u16;
+        
+        new_right
+    }
+
+    /// Convert this CompressedLeafNode to a regular LeafNode.
+    pub fn to_leaf_node(&self) -> crate::types::LeafNode<K, V> {
+        let mut keys = Vec::with_capacity(self.len as usize);
+        let mut values = Vec::with_capacity(self.len as usize);
+        
+        // Copy all keys and values
+        for i in 0..self.len as usize {
+            unsafe {
+                keys.push(*self.key_at(i));
+                values.push(*self.value_at(i));
+            }
+        }
+        
+        crate::types::LeafNode {
+            capacity: self.capacity as usize,
+            keys,
+            values,
+            next: crate::types::NULL_NODE,
+        }
     }
 
     /// Get a value by key.
@@ -370,7 +478,10 @@ mod tests {
     #[test]
     fn insert_single_item() {
         let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
-        assert!(leaf.insert(42, 100).is_ok());
+        match leaf.insert(42, 100) {
+            InsertResult::Updated(None) => {}, // New insertion
+            _ => panic!("Expected new insertion"),
+        }
         assert_eq!(leaf.len(), 1);
         assert_eq!(leaf.get(&42), Some(&100));
     }
@@ -441,7 +552,10 @@ mod tests {
     fn insert_multiple_sorted() {
         let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
         for i in 0..5 {
-            assert!(leaf.insert(i, i * 10).is_ok());
+            match leaf.insert(i, i * 10) {
+                InsertResult::Updated(None) => {}, // New insertion
+                _ => panic!("Expected new insertion"),
+            }
         }
         assert_eq!(leaf.len(), 5);
         
@@ -457,7 +571,10 @@ mod tests {
         let keys = [5, 1, 8, 3, 7];
         
         for &key in &keys {
-            assert!(leaf.insert(key, key * 10).is_ok());
+            match leaf.insert(key, key * 10) {
+                InsertResult::Updated(None) => {}, // New insertion
+                _ => panic!("Expected new insertion"),
+            }
         }
         assert_eq!(leaf.len(), 5);
         
@@ -482,12 +599,20 @@ mod tests {
         let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
         
         // Insert initial value
-        assert!(leaf.insert(42, 100).is_ok());
+        match leaf.insert(42, 100) {
+            InsertResult::Updated(None) => {}, // New insertion
+            _ => panic!("Expected new insertion"),
+        }
         assert_eq!(leaf.len(), 1);
         assert_eq!(leaf.get(&42), Some(&100));
         
         // Insert same key with different value (should update)
-        assert!(leaf.insert(42, 200).is_ok());
+        match leaf.insert(42, 200) {
+            InsertResult::Updated(Some(old_value)) => {
+                assert_eq!(old_value, 100);
+            },
+            _ => panic!("Expected key update"),
+        }
         assert_eq!(leaf.len(), 1); // Length shouldn't change
         assert_eq!(leaf.get(&42), Some(&200)); // Value should be updated
     }
@@ -500,12 +625,26 @@ mod tests {
         
         // Fill to capacity
         for i in 0..4 {
-            assert!(leaf.insert(i, i * 10).is_ok());
+            match leaf.insert(i, i * 10) {
+                InsertResult::Updated(None) => {}, // New insertion
+                _ => panic!("Expected new insertion"),
+            }
         }
         assert!(leaf.is_full());
         
-        // Attempt overflow
-        assert!(leaf.insert(99, 990).is_err());
+        // Attempt overflow - should trigger split
+        match leaf.insert(99, 990) {
+            InsertResult::Split { old_value: None, new_node_data, separator_key } => {
+                // Verify split occurred
+                assert!(separator_key >= 0 && separator_key <= 99);
+                // The new node should be a leaf
+                match new_node_data {
+                    SplitNodeData::Leaf(_) => {},
+                    _ => panic!("Expected leaf split"),
+                }
+            },
+            _ => panic!("Expected split when inserting beyond capacity"),
+        }
     }
 
     #[test]
@@ -513,9 +652,18 @@ mod tests {
         let mut leaf = CompressedLeafNode::<i32, i32>::new(10);
         
         // Test inserting at boundaries
-        assert!(leaf.insert(i32::MIN, -1000).is_ok());
-        assert!(leaf.insert(i32::MAX, 1000).is_ok());
-        assert!(leaf.insert(0, 0).is_ok());
+        match leaf.insert(i32::MIN, -1000) {
+            InsertResult::Updated(None) => {},
+            _ => panic!("Expected new insertion"),
+        }
+        match leaf.insert(i32::MAX, 1000) {
+            InsertResult::Updated(None) => {},
+            _ => panic!("Expected new insertion"),
+        }
+        match leaf.insert(0, 0) {
+            InsertResult::Updated(None) => {},
+            _ => panic!("Expected new insertion"),
+        }
         assert_eq!(leaf.len(), 3);
         
         // Verify they're accessible
@@ -524,8 +672,14 @@ mod tests {
         assert_eq!(leaf.get(&0), Some(&0));
         
         // Insert some values in between
-        assert!(leaf.insert(-100, -100).is_ok());
-        assert!(leaf.insert(100, 100).is_ok());
+        match leaf.insert(-100, -100) {
+            InsertResult::Updated(None) => {},
+            _ => panic!("Expected new insertion"),
+        }
+        match leaf.insert(100, 100) {
+            InsertResult::Updated(None) => {},
+            _ => panic!("Expected new insertion"),
+        }
         assert_eq!(leaf.len(), 5);
         
         // Verify sorted order is maintained
@@ -538,8 +692,18 @@ mod tests {
         }
         
         // Test updating boundary values
-        assert!(leaf.insert(i32::MIN, -2000).is_ok());
-        assert!(leaf.insert(i32::MAX, 2000).is_ok());
+        match leaf.insert(i32::MIN, -2000) {
+            InsertResult::Updated(Some(old_value)) => {
+                assert_eq!(old_value, -1000);
+            },
+            _ => panic!("Expected key update"),
+        }
+        match leaf.insert(i32::MAX, 2000) {
+            InsertResult::Updated(Some(old_value)) => {
+                assert_eq!(old_value, 1000);
+            },
+            _ => panic!("Expected key update"),
+        }
         assert_eq!(leaf.len(), 5); // Length shouldn't change
         
         assert_eq!(leaf.get(&i32::MIN), Some(&-2000));
@@ -584,7 +748,10 @@ mod tests {
     #[should_panic] // Remove this when implementing
     fn remove_existing_key() {
         let mut leaf = CompressedLeafNode::<i32, i32>::new(8);
-        leaf.insert(42, 100).unwrap();
+        match leaf.insert(42, 100) {
+            InsertResult::Updated(None) => {}, // New insertion
+            _ => panic!("Expected new insertion"),
+        }
         
         assert_eq!(leaf.remove(&42), Some(100));
         assert_eq!(leaf.len(), 0);
