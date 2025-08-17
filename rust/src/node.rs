@@ -18,25 +18,22 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     /// Get a value by key from this leaf node.
     #[inline]
     pub fn get(&self, key: &K) -> Option<&V> {
-        self.keys
-            .binary_search(key)
+        self.binary_search_keys(key)
             .ok()
-            .map(|index| &self.values[index])
+            .and_then(|index| self.get_value(index))
     }
 
     /// Get a mutable reference to a value by key from this leaf node.
     #[inline]
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        self.keys
-            .binary_search(key)
-            .ok()
-            .map(|index| &mut self.values[index])
+        let index = self.binary_search_keys(key).ok()?;
+        self.get_value_mut(index)
     }
 
     /// Returns the number of key-value pairs in this leaf.
     #[inline]
     pub fn len(&self) -> usize {
-        self.keys.len()
+        self.keys_len()
     }
 
     /// Get a reference to the keys in this leaf node.
@@ -54,6 +51,146 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         &mut self.values
     }
 
+    /// Get a key by index.
+    pub fn get_key(&self, index: usize) -> Option<&K> {
+        self.keys.get(index)
+    }
+
+    /// Get a value by index.
+    pub fn get_value(&self, index: usize) -> Option<&V> {
+        self.values.get(index)
+    }
+
+    /// Get a mutable reference to a value by index.
+    pub fn get_value_mut(&mut self, index: usize) -> Option<&mut V> {
+        self.values.get_mut(index)
+    }
+
+    /// Get the first key in the node.
+    pub fn first_key(&self) -> Option<&K> {
+        self.keys.first()
+    }
+
+    /// Get the last key in the node.
+    pub fn last_key(&self) -> Option<&K> {
+        self.keys.last()
+    }
+
+    /// Check if the keys vector is empty.
+    pub fn keys_is_empty(&self) -> bool {
+        self.keys.is_empty()
+    }
+
+    /// Get the number of keys.
+    pub fn keys_len(&self) -> usize {
+        self.keys.len()
+    }
+
+    /// Get the number of values.
+    pub fn values_len(&self) -> usize {
+        self.values.len()
+    }
+
+    /// Push a key to the keys vector.
+    pub fn push_key(&mut self, key: K) {
+        self.keys.push(key);
+    }
+
+    /// Push a value to the values vector.
+    pub fn push_value(&mut self, value: V) {
+        self.values.push(value);
+    }
+
+    /// Append keys from another vector.
+    pub fn append_keys(&mut self, other: &mut Vec<K>) {
+        self.keys.append(other);
+    }
+
+    /// Append values from another vector.
+    pub fn append_values(&mut self, other: &mut Vec<V>) {
+        self.values.append(other);
+    }
+
+    /// Take all keys, leaving an empty vector.
+    pub fn take_keys(&mut self) -> Vec<K> {
+        std::mem::take(&mut self.keys)
+    }
+
+    /// Take all values, leaving an empty vector.
+    pub fn take_values(&mut self) -> Vec<V> {
+        std::mem::take(&mut self.values)
+    }
+
+    /// Perform binary search on keys.
+    pub fn binary_search_keys(&self, key: &K) -> Result<usize, usize>
+    where
+        K: Ord,
+    {
+        self.keys.binary_search(key)
+    }
+
+    /// Consume the node and return the keys and values as iterators.
+    pub fn into_keys_values(self) -> (impl Iterator<Item = K>, impl Iterator<Item = V>) {
+        (self.keys.into_iter(), self.values.into_iter())
+    }
+
+    /// Get a key by index with bounds checking.
+    pub fn get_key_at(&self, index: usize) -> Option<&K> {
+        self.keys.get(index)
+    }
+
+    /// Get a value by index with bounds checking.
+    pub fn get_value_at(&self, index: usize) -> Option<&V> {
+        self.values.get(index)
+    }
+
+    /// Insert a key and value at specific indices (used internally).
+    pub fn insert_at(&mut self, index: usize, key: K, value: V) {
+        self.keys.insert(index, key);
+        self.values.insert(index, value);
+    }
+
+    /// Remove key and value at specific index.
+    pub fn remove_at(&mut self, index: usize) -> Option<(K, V)> {
+        if index < self.keys.len() {
+            let key = self.keys.remove(index);
+            let value = self.values.remove(index);
+            Some((key, value))
+        } else {
+            None
+        }
+    }
+
+    /// Pop the last key-value pair.
+    pub fn pop(&mut self) -> Option<(K, V)> {
+        if let (Some(key), Some(value)) = (self.keys.pop(), self.values.pop()) {
+            Some((key, value))
+        } else {
+            None
+        }
+    }
+
+    /// Remove and return the first key-value pair.
+    pub fn remove_first(&mut self) -> Option<(K, V)> {
+        if !self.keys.is_empty() {
+            let key = self.keys.remove(0);
+            let value = self.values.remove(0);
+            Some((key, value))
+        } else {
+            None
+        }
+    }
+
+    /// Split the keys vector at the given index.
+    pub fn split_keys_at(&mut self, at: usize) -> Vec<K> {
+        self.keys.split_off(at)
+    }
+
+    /// Split the values vector at the given index.
+    pub fn split_values_at(&mut self, at: usize) -> Vec<V> {
+        self.values.split_off(at)
+    }
+
     // ============================================================================
     // INSERT OPERATIONS
     // ============================================================================
@@ -61,11 +198,15 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     /// Insert a key-value pair and handle splitting if necessary.
     pub fn insert(&mut self, key: K, value: V) -> InsertResult<K, V> {
         // Do binary search once and use the result throughout
-        match self.keys.binary_search(&key) {
+        match self.binary_search_keys(&key) {
             Ok(index) => {
                 // Key already exists, update the value
-                let old_value = std::mem::replace(&mut self.values[index], value);
-                InsertResult::Updated(Some(old_value))
+                if let Some(old_val) = self.get_value_mut(index) {
+                    let old_value = std::mem::replace(old_val, value);
+                    InsertResult::Updated(Some(old_value))
+                } else {
+                    InsertResult::Updated(None)
+                }
             }
             Err(index) => {
                 // Key doesn't exist, need to insert
@@ -85,7 +226,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
                 let new_right = self.split();
 
                 // Determine the separator key (first key of right node)
-                let separator_key = new_right.keys[0].clone();
+                let separator_key = new_right.first_key().unwrap().clone();
 
                 InsertResult::Split {
                     old_value: None,

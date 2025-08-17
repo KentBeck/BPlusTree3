@@ -340,7 +340,7 @@ mod tests {
     fn test_leaf_construction() {
         let leaf = LeafNode::<i32, String>::new(16);
         assert_eq!(leaf.capacity, 16);
-        assert!(leaf.keys.is_empty());
+        assert!(leaf.keys_is_empty());
     }
 
     #[test]

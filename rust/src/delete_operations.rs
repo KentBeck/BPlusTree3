@@ -668,7 +668,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         // Update separator in parent (new first key of right sibling, second parent access)
         let new_separator = self
             .get_leaf(right_id)
-            .and_then(|right_leaf| right_leaf.keys.first().cloned());
+            .and_then(|right_leaf| right_leaf.first_key().cloned());
 
         // Use Option combinators for nested conditional update
         new_separator
@@ -706,8 +706,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         let Some(left_leaf) = self.get_leaf_mut(left_id) else {
             return false;
         };
-        left_leaf.keys.append(&mut child_keys);
-        left_leaf.values.append(&mut child_values);
+        left_leaf.append_keys(&mut child_keys);
+        left_leaf.append_values(&mut child_values);
         left_leaf.next = child_next;
 
         // Remove child from parent (second and final parent access)
@@ -747,8 +747,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             // First, extract content from right
             let (mut right_keys, mut right_values, right_next) = match self.get_leaf_mut(right_id) {
                 Some(right_leaf) => {
-                    let keys = std::mem::take(&mut right_leaf.keys);
-                    let values = std::mem::take(&mut right_leaf.values);
+                    let keys = right_leaf.take_keys();
+                    let values = right_leaf.take_values();
                     let next = right_leaf.next;
                     (keys, values, next)
                 }
@@ -759,8 +759,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             let Some(child_leaf) = self.get_leaf_mut(child_id) else {
                 return false;
             };
-            child_leaf.keys.append(&mut right_keys);
-            child_leaf.values.append(&mut right_values);
+            child_leaf.append_keys(&mut right_keys);
+            child_leaf.append_values(&mut right_values);
             child_leaf.next = right_next;
         }
 

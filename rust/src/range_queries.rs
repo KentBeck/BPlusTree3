@@ -108,7 +108,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 NodeRef::Leaf(leaf_id, _) => {
                     if let Some(leaf) = self.get_leaf(*leaf_id) {
                         // Find the position where this key would be inserted
-                        let index = match leaf.keys.binary_search(key) {
+                        let index = match leaf.binary_search_keys(key) {
                             Ok(idx) => idx,     // Key found at exact position
                             Err(idx) => idx,    // Key would be inserted at this position
                         };
@@ -171,7 +171,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             match current {
                 NodeRef::Leaf(leaf_id, _) => {
                     if let Some(leaf) = self.get_leaf(*leaf_id) {
-                        let last_index = if leaf.keys.is_empty() { 0 } else { leaf.keys.len() - 1 };
+                        let last_index = if leaf.keys_is_empty() { 0 } else { leaf.keys_len() - 1 };
                         return Some((*leaf_id, last_index));
                     } else {
                         return None;

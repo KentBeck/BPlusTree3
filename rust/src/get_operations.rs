@@ -387,11 +387,11 @@ mod tests {
         assert_eq!(leaf.get_mut(&1), None);
         
         // Add some data manually for testing
-        leaf.keys.push(1);
-        leaf.values.push("one");
-        leaf.keys.push(3);
-        leaf.values.push("three");
-        
+        leaf.push_key(1);
+        leaf.push_value("one");
+        leaf.push_key(3);
+        leaf.push_value("three");
+
         // Test get operations
         assert_eq!(leaf.get(&1), Some(&"one"));
         assert_eq!(leaf.get(&3), Some(&"three"));

@@ -947,12 +947,16 @@ where
         let capacity = leaf.capacity.min(Self::calculate_max_capacity());
         let mut compressed = Self::new(capacity);
         
+        // Save next before consuming leaf
+        let next = leaf.next;
+        
         // Copy all key-value pairs
-        for (key, value) in leaf.keys.into_iter().zip(leaf.values.into_iter()) {
+        let (keys_iter, values_iter) = leaf.into_keys_values();
+        for (key, value) in keys_iter.zip(values_iter) {
             let _ = compressed.insert(key, value); // Should never fail since we're within capacity
         }
-        
-        compressed.next = leaf.next;
+
+        compressed.next = next;
         compressed
     }
 }
@@ -1971,11 +1975,11 @@ mod tests {
         assert_eq!(regular.next, 777);
         
         // Data should also be preserved
-        assert_eq!(regular.keys.len(), 3);
-        assert_eq!(regular.values.len(), 3);
+        assert_eq!(regular.keys_len(), 3);
+        assert_eq!(regular.values_len(), 3);
         for i in 0..3 {
-            assert_eq!(regular.keys[i], i as i32);
-            assert_eq!(regular.values[i], (i * 10) as i32);
+            assert_eq!(*regular.get_key_at(i).unwrap(), i as i32);
+            assert_eq!(*regular.get_value_at(i).unwrap(), (i * 10) as i32);
         }
     }
 

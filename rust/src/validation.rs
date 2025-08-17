@@ -157,25 +157,27 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         match node {
             NodeRef::Leaf(id, _) => {
                 if let Some(leaf) = self.get_leaf(*id) {
-                    // Check leaf invariants
-                    if leaf.keys.len() != leaf.values.len() {
-                        return false; // Keys and values must have same length
-                    }
+                     // Check leaf invariants
+                     if leaf.keys_len() != leaf.values_len() {
+                         return false; // Keys and values must have same length
+                     }
 
-                    // Check that keys are sorted
-                    for i in 1..leaf.keys.len() {
-                        if leaf.keys[i - 1] >= leaf.keys[i] {
-                            return false; // Keys must be in ascending order
-                        }
-                    }
+                     // Check that keys are sorted
+                     for i in 1..leaf.keys_len() {
+                         if let (Some(prev_key), Some(curr_key)) = (leaf.get_key(i - 1), leaf.get_key(i)) {
+                             if prev_key >= curr_key {
+                                 return false; // Keys must be in ascending order
+                             }
+                         }
+                     }
 
                     // Check capacity constraints
-                    if leaf.keys.len() > self.capacity {
+                    if leaf.keys_len() > self.capacity {
                         return false; // Node exceeds capacity
                     }
 
                     // Check minimum occupancy
-                    if !leaf.keys.is_empty() && leaf.is_underfull() {
+                    if !leaf.keys_is_empty() && leaf.is_underfull() {
                         // For root nodes, allow fewer keys only if it's the only node
                         if _is_root {
                             // Root leaf can have any number of keys >= 1
@@ -187,13 +189,21 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
                     // Check key bounds
                     if let Some(min) = min_key {
-                        if !leaf.keys.is_empty() && &leaf.keys[0] < min {
-                            return false; // First key must be >= min_key
+                        if !leaf.keys_is_empty() {
+                            if let Some(first_key) = leaf.first_key() {
+                                if first_key < min {
+                                    return false; // First key must be >= min_key
+                                }
+                            }
                         }
                     }
                     if let Some(max) = max_key {
-                        if !leaf.keys.is_empty() && &leaf.keys[leaf.keys.len() - 1] >= max {
-                            return false; // Last key must be < max_key
+                        if !leaf.keys_is_empty() {
+                            if let Some(last_key) = leaf.last_key() {
+                                if last_key >= max {
+                                    return false; // Last key must be < max_key
+                                }
+                            }
                         }
                     }
 
@@ -295,7 +305,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         match node {
             NodeRef::Leaf(id, _) => {
                 if let Some(leaf) = self.get_leaf(*id) {
-                    sizes.push(leaf.keys.len());
+                    sizes.push(leaf.keys_len());
                 }
             }
             NodeRef::Branch(id, _) => {
@@ -319,7 +329,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         indent,
                         id,
                         leaf.capacity,
-                        leaf.keys.len()
+                        leaf.keys_len()
                     );
                 } else {
                     println!("{}Leaf[id={}]: <missing>", indent, id);

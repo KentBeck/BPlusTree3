@@ -148,12 +148,12 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
     /// Helper method to try getting the next item from the current leaf
     fn try_get_next_item(&mut self, leaf: &'a LeafNode<K, V>) -> Option<(&'a K, &'a V)> {
         // Check if we have more items in the current leaf
-        if self.current_leaf_index >= leaf.keys.len() {
+        if self.current_leaf_index >= leaf.keys_len() {
             return None;
         }
 
-        let key = &leaf.keys[self.current_leaf_index];
-        let value = &leaf.values[self.current_leaf_index];
+        let key = leaf.get_key(self.current_leaf_index)?;
+        let value = leaf.get_value(self.current_leaf_index)?;
 
         // Check if we've reached the end bound using Option combinators
         let beyond_end = self
@@ -294,7 +294,7 @@ impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
                 // Extract first key if needed for skipping, avoid redundant arena lookup
                 let first_key = if skip_first {
                     tree.get_leaf(leaf_id)
-                        .and_then(|leaf| leaf.keys.get(index))
+                        .and_then(|leaf| leaf.get_key(index))
                         .cloned()
                 } else {
                     None
@@ -369,9 +369,9 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for FastItemIterator<'a, K, V> {
             // Use cached leaf reference - NO arena lookup here!
             let leaf = self.current_leaf_ref?;
 
-            if self.current_leaf_index < leaf.keys.len() {
-                let key = &leaf.keys[self.current_leaf_index];
-                let value = &leaf.values[self.current_leaf_index];
+            if self.current_leaf_index < leaf.keys_len() {
+                let key = leaf.get_key(self.current_leaf_index)?;
+                let value = leaf.get_value(self.current_leaf_index)?;
                 self.current_leaf_index += 1;
                 return Some((key, value));
             } else {
