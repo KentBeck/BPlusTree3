@@ -1,7 +1,6 @@
 /// Test cases to reproduce specific bugs found in the B+ tree implementation
 /// Each test demonstrates a concrete failure case for the identified issues
 // BPlusTreeMap import removed - using test_utils instead
-
 mod test_utils;
 use test_utils::*;
 
@@ -266,7 +265,7 @@ fn test_arena_id_collision() {
     // This creates potential confusion
 
     // Test the ID collision by checking arena behavior
-        let initial_leaf_stats = tree.leaf_arena_stats();
+    let initial_leaf_stats = tree.leaf_arena_stats();
     let initial_count = initial_leaf_stats.allocated_count;
 
     // The issue is that ROOT_NODE = 0 and arena allocation starts at 0

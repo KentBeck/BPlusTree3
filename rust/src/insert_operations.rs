@@ -4,7 +4,7 @@
 //! key-value insertion, node splitting, tree growth, and helper methods for
 //! managing the tree structure during insertions.
 
-use crate::types::{BPlusTreeMap, NodeRef, BranchNode, InsertResult, SplitNodeData};
+use crate::types::{BPlusTreeMap, BranchNode, InsertResult, NodeRef, SplitNodeData};
 use std::marker::PhantomData;
 
 impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
@@ -28,7 +28,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Recursively insert a key with proper arena access.
-    pub fn insert_recursive(&mut self, node: &NodeRef<K, V>, key: K, value: V) -> InsertResult<K, V> {
+    pub fn insert_recursive(
+        &mut self,
+        node: &NodeRef<K, V>,
+        key: K,
+        value: V,
+    ) -> InsertResult<K, V> {
         match node {
             NodeRef::Leaf(id, _) => self
                 .get_leaf_mut(*id)

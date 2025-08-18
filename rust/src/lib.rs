@@ -10,37 +10,31 @@
 // Import our new modules
 // arena.rs removed - only compact_arena.rs is used
 mod compact_arena;
-mod error;
-mod macros;
-mod types;
+mod comprehensive_performance_benchmark;
 mod construction;
-mod get_operations;
-mod insert_operations;
 mod delete_operations;
 mod detailed_iterator_analysis;
-mod comprehensive_performance_benchmark;
-mod node;
+mod error;
+mod get_operations;
+mod insert_operations;
 mod iteration;
-mod validation;
-mod tree_structure;
+mod macros;
+mod node;
 mod range_queries;
+mod tree_structure;
+mod types;
+mod validation;
 
 // Generic Arena removed - only CompactArena is used in the implementation
 pub use compact_arena::{CompactArena, CompactArenaStats};
-pub use error::{
-    BPlusTreeError, BTreeResult, BTreeResultExt, InitResult, KeyResult, ModifyResult,
-};
-pub use types::{BPlusTreeMap, NodeId, NodeRef, NULL_NODE, ROOT_NODE, LeafNode, BranchNode};
-pub use construction::{InitResult as ConstructionResult};
-pub use iteration::{ItemIterator, FastItemIterator, KeyIterator, ValueIterator, RangeIterator};
+pub use construction::InitResult as ConstructionResult;
+pub use error::{BPlusTreeError, BTreeResult, BTreeResultExt, InitResult, KeyResult, ModifyResult};
+pub use iteration::{FastItemIterator, ItemIterator, KeyIterator, RangeIterator, ValueIterator};
+pub use types::{BPlusTreeMap, BranchNode, LeafNode, NodeId, NodeRef, NULL_NODE, ROOT_NODE};
 
 // PhantomData import moved to tree_structure.rs module
 
 // Internal type imports removed - no longer needed in main lib.rs
-
-
-
-
 
 #[cfg(test)]
 mod leaf_caching_tests {
@@ -49,30 +43,36 @@ mod leaf_caching_tests {
     #[test]
     fn test_leaf_caching_optimization_proof() {
         let mut tree = BPlusTreeMap::new(4).unwrap(); // Small capacity to force multiple leaves
-        
+
         // Insert enough data to span multiple leaves
         for i in 0..20 {
             tree.insert(i, i * 100);
         }
-        
+
         // Create iterator and verify it has cached leaf reference
         let mut iter = tree.items();
-        
+
         // First call to next() should populate the cache
         let first_item = iter.next();
         assert_eq!(first_item, Some((&0, &0)));
-        
+
         // The key insight: iter.current_leaf_ref should now be Some(...)
         // This proves leaf caching is working
-        assert!(iter.current_leaf_ref.is_some(), "Leaf reference should be cached after first next() call");
-        
+        assert!(
+            iter.current_leaf_ref.is_some(),
+            "Leaf reference should be cached after first next() call"
+        );
+
         // Subsequent calls within the same leaf should use cached reference
         let second_item = iter.next();
         assert_eq!(second_item, Some((&1, &100)));
-        
+
         // The cached reference should still be valid
-        assert!(iter.current_leaf_ref.is_some(), "Leaf reference should remain cached within same leaf");
-        
+        assert!(
+            iter.current_leaf_ref.is_some(),
+            "Leaf reference should remain cached within same leaf"
+        );
+
         // Continue iterating to verify caching works across leaf boundaries
         let mut count = 2; // Already consumed 2 items
         for (k, v) in iter {
@@ -86,22 +86,25 @@ mod leaf_caching_tests {
     #[test]
     fn test_fast_iterator_also_uses_leaf_caching() {
         let mut tree = BPlusTreeMap::new(4).unwrap();
-        
+
         // Insert data spanning multiple leaves
         for i in 0..20 {
             tree.insert(i, i * 100);
         }
-        
+
         // Test FastItemIterator also uses leaf caching
         let mut fast_iter = tree.items_fast();
-        
+
         // First call should populate cache
         let first_item = fast_iter.next();
         assert_eq!(first_item, Some((&0, &0)));
-        
+
         // Verify FastItemIterator also caches leaf references
-        assert!(fast_iter.current_leaf_ref.is_some(), "FastItemIterator should also cache leaf references");
-        
+        assert!(
+            fast_iter.current_leaf_ref.is_some(),
+            "FastItemIterator should also cache leaf references"
+        );
+
         // Verify it works correctly
         let mut count = 1; // Already consumed 1 item
         for (k, v) in fast_iter {
@@ -112,10 +115,6 @@ mod leaf_caching_tests {
         assert_eq!(count, 20);
     }
 }
-
-
-
-
 
 impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ============================================================================
@@ -252,8 +251,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     // All arena management and tree structure methods moved to tree_structure.rs module
 
-    
-
     // ============================================================================
     // VALIDATION AND DEBUGGING METHODS
     // ============================================================================
@@ -273,8 +270,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
 // Default implementation moved to construction.rs module
 
-
-
 // LeafNode implementation moved to node.rs module
 
 // Default implementation moved to construction.rs module
@@ -284,4 +279,3 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 // Default implementation moved to construction.rs module
 
 // Iterator implementations moved to iteration.rs module
-

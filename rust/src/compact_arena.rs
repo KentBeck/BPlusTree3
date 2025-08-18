@@ -56,7 +56,7 @@ impl<T> CompactArena<T> {
     #[inline]
     pub fn allocate(&mut self, item: T) -> NodeId {
         self.generation = self.generation.wrapping_add(1);
-        
+
         let index = if let Some(free_index) = self.free_list.pop() {
             // Reuse a free slot
             self.storage[free_index] = item;
@@ -75,14 +75,16 @@ impl<T> CompactArena<T> {
 
     /// Deallocate an item from the arena and return it (requires Default)
     #[inline]
-    pub fn deallocate(&mut self, id: NodeId) -> Option<T> 
-    where T: Default {
+    pub fn deallocate(&mut self, id: NodeId) -> Option<T>
+    where
+        T: Default,
+    {
         if id == NULL_NODE {
             return None;
         }
 
         let index = usize::try_from(id).ok()?;
-        
+
         // Check if the slot is actually allocated
         if !self.allocated_mask.get(index).copied().unwrap_or(false) {
             return None;
@@ -104,7 +106,7 @@ impl<T> CompactArena<T> {
         }
 
         let index = usize::try_from(id).ok().unwrap_or(usize::MAX);
-        
+
         // Check if the slot is actually allocated
         if index >= self.allocated_mask.len() || !self.allocated_mask[index] {
             return false;
@@ -122,12 +124,11 @@ impl<T> CompactArena<T> {
         if id == NULL_NODE {
             return None;
         }
-        
+
         let index = usize::try_from(id).ok()?;
-        
+
         // Check bounds and allocation status
-        if index < self.storage.len() && 
-           self.allocated_mask.get(index).copied().unwrap_or(false) {
+        if index < self.storage.len() && self.allocated_mask.get(index).copied().unwrap_or(false) {
             Some(&self.storage[index])
         } else {
             None
@@ -140,12 +141,11 @@ impl<T> CompactArena<T> {
         if id == NULL_NODE {
             return None;
         }
-        
+
         let index = usize::try_from(id).ok()?;
-        
+
         // Check bounds and allocation status
-        if index < self.storage.len() && 
-           self.allocated_mask.get(index).copied().unwrap_or(false) {
+        if index < self.storage.len() && self.allocated_mask.get(index).copied().unwrap_or(false) {
             Some(&mut self.storage[index])
         } else {
             None
@@ -171,16 +171,19 @@ impl<T> CompactArena<T> {
         if id == NULL_NODE {
             return false;
         }
-        
+
         let index = usize::try_from(id).unwrap_or(usize::MAX);
-        index < self.storage.len() && 
-        self.allocated_mask.get(index).copied().unwrap_or(false)
+        index < self.storage.len() && self.allocated_mask.get(index).copied().unwrap_or(false)
     }
 
     /// Get arena statistics
     pub fn stats(&self) -> CompactArenaStats {
         let total_capacity = self.storage.capacity();
-        let allocated_count = self.allocated_mask.iter().filter(|&&allocated| allocated).count();
+        let allocated_count = self
+            .allocated_mask
+            .iter()
+            .filter(|&&allocated| allocated)
+            .count();
         let free_count = self.free_list.len();
         let utilization = if total_capacity > 0 {
             allocated_count as f64 / total_capacity as f64
@@ -203,14 +206,21 @@ impl<T> CompactArena<T> {
     }
 
     /// Compact the arena by removing gaps (expensive operation)
-    pub fn compact(&mut self) where T: Clone {
+    pub fn compact(&mut self)
+    where
+        T: Clone,
+    {
         let mut new_storage = Vec::with_capacity(self.storage.len());
         let mut new_allocated_mask = Vec::with_capacity(self.allocated_mask.len());
         let mut index_mapping = vec![NULL_NODE; self.storage.len()];
-        
+
         // Copy allocated items to new storage
-        for (old_index, (item, &allocated)) in 
-            self.storage.iter().zip(self.allocated_mask.iter()).enumerate() {
+        for (old_index, (item, &allocated)) in self
+            .storage
+            .iter()
+            .zip(self.allocated_mask.iter())
+            .enumerate()
+        {
             if allocated {
                 let new_index = new_storage.len();
                 new_storage.push(item.clone());
@@ -218,18 +228,21 @@ impl<T> CompactArena<T> {
                 index_mapping[old_index] = new_index as NodeId;
             }
         }
-        
+
         self.storage = new_storage;
         self.allocated_mask = new_allocated_mask;
         self.free_list.clear();
-        
-        // Note: This breaks existing NodeIds! 
+
+        // Note: This breaks existing NodeIds!
         // In a real implementation, you'd need to update all references
     }
 
     /// Get the number of allocated items
     pub fn len(&self) -> usize {
-        self.allocated_mask.iter().filter(|&&allocated| allocated).count()
+        self.allocated_mask
+            .iter()
+            .filter(|&&allocated| allocated)
+            .count()
     }
 
     /// Check if the arena is empty
@@ -282,7 +295,7 @@ impl<T: Default> CompactArena<T> {
         }
 
         let index = usize::try_from(id).ok()?;
-        
+
         // Check if the slot is actually allocated
         if !self.allocated_mask.get(index).copied().unwrap_or(false) {
             return None;
@@ -291,7 +304,7 @@ impl<T: Default> CompactArena<T> {
         // Mark as free and replace with default
         self.allocated_mask[index] = false;
         self.free_list.push(index);
-        
+
         let old_value = std::mem::replace(&mut self.storage[index], T::default());
         Some(old_value)
     }
@@ -304,23 +317,23 @@ mod tests {
     #[test]
     fn test_compact_arena_basic_operations() {
         let mut arena = CompactArena::new();
-        
+
         // Allocate some items
         let id1 = arena.allocate(42);
         let id2 = arena.allocate(84);
         let id3 = arena.allocate(126);
-        
+
         // Test retrieval
         assert_eq!(arena.get(id1), Some(&42));
         assert_eq!(arena.get(id2), Some(&84));
         assert_eq!(arena.get(id3), Some(&126));
-        
+
         // Test contains
         assert!(arena.contains(id1));
         assert!(arena.contains(id2));
         assert!(arena.contains(id3));
         assert!(!arena.contains(NULL_NODE));
-        
+
         // Test stats
         let stats = arena.stats();
         assert_eq!(stats.allocated_count, 3);
@@ -330,20 +343,20 @@ mod tests {
     #[test]
     fn test_compact_arena_with_default() {
         let mut arena: CompactArena<i32> = CompactArena::new();
-        
+
         let id1 = arena.allocate(42);
         let id2 = arena.allocate(84);
-        
+
         // Deallocate with default
         let removed = arena.deallocate_with_default(id1);
         assert_eq!(removed, Some(42));
         assert!(!arena.contains(id1));
         assert!(arena.contains(id2));
-        
+
         // Reuse the slot
         let id3 = arena.allocate(168);
         assert_eq!(arena.get(id3), Some(&168));
-        
+
         let stats = arena.stats();
         assert_eq!(stats.allocated_count, 2);
         assert_eq!(stats.free_count, 0); // Should be reused
@@ -353,7 +366,7 @@ mod tests {
     fn test_unsafe_access() {
         let mut arena = CompactArena::new();
         let id = arena.allocate(42);
-        
+
         unsafe {
             assert_eq!(*arena.get_unchecked(id), 42);
             *arena.get_unchecked_mut(id) = 84;
@@ -366,7 +379,7 @@ mod tests {
 // BPLUSTREE ARENA ALLOCATION HELPERS
 // ============================================================================
 
-use crate::types::{BPlusTreeMap, LeafNode, BranchNode};
+use crate::types::{BPlusTreeMap, BranchNode, LeafNode};
 
 impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ============================================================================
@@ -385,7 +398,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.branch_arena.allocate(branch)
     }
 
-    
     /// Deallocate a leaf node from the arena.
     #[inline]
     pub fn deallocate_leaf(&mut self, id: NodeId) -> Option<LeafNode<K, V>> {

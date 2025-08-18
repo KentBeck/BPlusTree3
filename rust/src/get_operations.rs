@@ -4,7 +4,7 @@
 //! key lookup, value retrieval, and helper methods for accessing nodes.
 
 use crate::error::{BPlusTreeError, BTreeResult, KeyResult};
-use crate::types::{BPlusTreeMap, NodeRef, LeafNode, BranchNode, NodeId, NULL_NODE};
+use crate::types::{BPlusTreeMap, BranchNode, LeafNode, NodeId, NodeRef, NULL_NODE};
 
 impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ============================================================================
@@ -158,8 +158,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// assert!(tree.try_get(&2).is_err());
     /// ```
     pub fn try_get(&self, key: &K) -> KeyResult<&V> {
-        self.get(key)
-            .ok_or(BPlusTreeError::KeyNotFound)
+        self.get(key).ok_or(BPlusTreeError::KeyNotFound)
     }
 
     /// Get multiple keys with detailed error reporting.
@@ -180,10 +179,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// let mut tree = BPlusTreeMap::new(16).unwrap();
     /// tree.insert(1, "one");
     /// tree.insert(2, "two");
-    /// 
+    ///
     /// let values = tree.get_many(&[1, 2]).unwrap();
     /// assert_eq!(values, vec![&"one", &"two"]);
-    /// 
+    ///
     /// assert!(tree.get_many(&[1, 3]).is_err()); // Key 3 doesn't exist
     /// ```
     pub fn get_many(&self, keys: &[K]) -> BTreeResult<Vec<&V>> {
@@ -292,22 +291,22 @@ mod tests {
     #[test]
     fn test_basic_get_operations() {
         let mut tree = BPlusTreeMap::new(4).unwrap();
-        
+
         // Test empty tree
         assert_eq!(tree.get(&1), None);
         assert!(!tree.contains_key(&1));
-        
+
         // Insert some values
         tree.insert(1, "one");
         tree.insert(2, "two");
         tree.insert(3, "three");
-        
+
         // Test get operations
         assert_eq!(tree.get(&1), Some(&"one"));
         assert_eq!(tree.get(&2), Some(&"two"));
         assert_eq!(tree.get(&3), Some(&"three"));
         assert_eq!(tree.get(&4), None);
-        
+
         // Test contains_key
         assert!(tree.contains_key(&1));
         assert!(tree.contains_key(&2));
@@ -319,7 +318,7 @@ mod tests {
     fn test_get_or_default() {
         let mut tree = BPlusTreeMap::new(4).unwrap();
         tree.insert(1, "one");
-        
+
         assert_eq!(tree.get_or_default(&1, &"default"), &"one");
         assert_eq!(tree.get_or_default(&2, &"default"), &"default");
     }
@@ -328,23 +327,26 @@ mod tests {
     fn test_get_item() {
         let mut tree = BPlusTreeMap::new(4).unwrap();
         tree.insert(1, "one");
-        
+
         assert_eq!(tree.get_item(&1).unwrap(), &"one");
         assert!(tree.get_item(&2).is_err());
-        assert!(matches!(tree.get_item(&2), Err(BPlusTreeError::KeyNotFound)));
+        assert!(matches!(
+            tree.get_item(&2),
+            Err(BPlusTreeError::KeyNotFound)
+        ));
     }
 
     #[test]
     fn test_get_mut() {
         let mut tree = BPlusTreeMap::new(4).unwrap();
         tree.insert(1, "one");
-        
+
         // Test mutable access
         if let Some(value) = tree.get_mut(&1) {
             *value = "ONE";
         }
         assert_eq!(tree.get(&1), Some(&"ONE"));
-        
+
         // Test non-existent key
         assert_eq!(tree.get_mut(&2), None);
     }
@@ -355,14 +357,14 @@ mod tests {
         tree.insert(1, "one");
         tree.insert(2, "two");
         tree.insert(3, "three");
-        
+
         // Test successful get_many
         let values = tree.get_many(&[1, 2, 3]).unwrap();
         assert_eq!(values, vec![&"one", &"two", &"three"]);
-        
+
         // Test partial failure
         assert!(tree.get_many(&[1, 2, 4]).is_err());
-        
+
         // Test empty slice
         let empty_values = tree.get_many(&[]).unwrap();
         assert!(empty_values.is_empty());
@@ -372,7 +374,7 @@ mod tests {
     fn test_try_get() {
         let mut tree = BPlusTreeMap::new(4).unwrap();
         tree.insert(1, "one");
-        
+
         assert!(tree.try_get(&1).is_ok());
         assert_eq!(tree.try_get(&1).unwrap(), &"one");
         assert!(tree.try_get(&2).is_err());
@@ -381,11 +383,11 @@ mod tests {
     #[test]
     fn test_leaf_node_get_operations() {
         let mut leaf = LeafNode::new(4);
-        
+
         // Test empty leaf
         assert_eq!(leaf.get(&1), None);
         assert_eq!(leaf.get_mut(&1), None);
-        
+
         // Add some data manually for testing
         leaf.push_key(1);
         leaf.push_value("one");
@@ -396,7 +398,7 @@ mod tests {
         assert_eq!(leaf.get(&1), Some(&"one"));
         assert_eq!(leaf.get(&3), Some(&"three"));
         assert_eq!(leaf.get(&2), None);
-        
+
         // Test get_mut
         if let Some(value) = leaf.get_mut(&1) {
             *value = "ONE";
@@ -408,23 +410,23 @@ mod tests {
     fn test_branch_node_operations() {
         use crate::types::NodeRef;
         use std::marker::PhantomData;
-        
+
         let mut branch = BranchNode::<i32, String>::new(4);
-        
+
         // Add some keys and children for testing
         branch.keys.push(5);
         branch.keys.push(10);
         branch.children.push(NodeRef::Leaf(0, PhantomData));
         branch.children.push(NodeRef::Leaf(1, PhantomData));
         branch.children.push(NodeRef::Leaf(2, PhantomData));
-        
+
         // Test find_child_index
-        assert_eq!(branch.find_child_index(&3), 0);  // Less than first key
-        assert_eq!(branch.find_child_index(&5), 1);  // Equal to first key
-        assert_eq!(branch.find_child_index(&7), 1);  // Between keys
+        assert_eq!(branch.find_child_index(&3), 0); // Less than first key
+        assert_eq!(branch.find_child_index(&5), 1); // Equal to first key
+        assert_eq!(branch.find_child_index(&7), 1); // Between keys
         assert_eq!(branch.find_child_index(&10), 2); // Equal to second key
         assert_eq!(branch.find_child_index(&15), 2); // Greater than all keys
-        
+
         // Test get_child
         assert!(branch.get_child(&3).is_some());
         assert!(branch.get_child(&7).is_some());

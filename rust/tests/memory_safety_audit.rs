@@ -19,7 +19,10 @@ fn test_arena_bounds_checking() {
 
     println!("Successfully inserted 10,000 items");
     println!("Allocated leaves: {}", tree.allocated_leaf_count());
-    println!("Allocated branches: {}", tree.branch_arena_stats().allocated_count);
+    println!(
+        "Allocated branches: {}",
+        tree.branch_arena_stats().allocated_count
+    );
 
     // Verify all items are accessible
     for i in 0..10000 {
@@ -186,7 +189,8 @@ fn test_memory_safety_stress() {
 
         // Every 20 rounds, verify integrity
         if round % 20 == 19 {
-            let allocated = tree.leaf_arena_stats().allocated_count + tree.branch_arena_stats().allocated_count;
+            let allocated =
+                tree.leaf_arena_stats().allocated_count + tree.branch_arena_stats().allocated_count;
             let (tree_leaves, tree_branches) = tree.count_nodes_in_tree();
             let in_tree = tree_leaves + tree_branches;
 

@@ -3,8 +3,8 @@
 //! This module contains all validation methods, invariant checking, debugging utilities,
 //! and test helpers for the B+ tree implementation.
 
-use crate::types::{BPlusTreeMap, NodeRef, NodeId};
 use crate::error::{BPlusTreeError, TreeResult};
+use crate::types::{BPlusTreeMap, NodeId, NodeRef};
 
 // ============================================================================
 // VALIDATION METHODS
@@ -157,19 +157,21 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         match node {
             NodeRef::Leaf(id, _) => {
                 if let Some(leaf) = self.get_leaf(*id) {
-                     // Check leaf invariants
-                     if leaf.keys_len() != leaf.values_len() {
-                         return false; // Keys and values must have same length
-                     }
+                    // Check leaf invariants
+                    if leaf.keys_len() != leaf.values_len() {
+                        return false; // Keys and values must have same length
+                    }
 
-                     // Check that keys are sorted
-                     for i in 1..leaf.keys_len() {
-                         if let (Some(prev_key), Some(curr_key)) = (leaf.get_key(i - 1), leaf.get_key(i)) {
-                             if prev_key >= curr_key {
-                                 return false; // Keys must be in ascending order
-                             }
-                         }
-                     }
+                    // Check that keys are sorted
+                    for i in 1..leaf.keys_len() {
+                        if let (Some(prev_key), Some(curr_key)) =
+                            (leaf.get_key(i - 1), leaf.get_key(i))
+                        {
+                            if prev_key >= curr_key {
+                                return false; // Keys must be in ascending order
+                            }
+                        }
+                    }
 
                     // Check capacity constraints
                     if leaf.keys_len() > self.capacity {
@@ -362,7 +364,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Check if tree is in a valid state for operations
     pub fn validate_for_operation(&self, operation: &str) -> crate::error::BTreeResult<()> {
         self.check_invariants_detailed().map_err(|e| {
-            BPlusTreeError::data_integrity(operation, &format!("Validation for {}: {}", operation, e))
+            BPlusTreeError::data_integrity(
+                operation,
+                &format!("Validation for {}: {}", operation, e),
+            )
         })
     }
 }

@@ -250,7 +250,7 @@ pub fn arena_exhaustion_attack(tree: &mut BPlusTreeMap<i32, String>, cycle: usiz
         "Cycle {}: Free leaves={}, Free branches={}",
         cycle,
         tree.free_leaf_count(),
-                tree.branch_arena_stats().free_count
+        tree.branch_arena_stats().free_count
     );
 }
 

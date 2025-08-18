@@ -3,8 +3,8 @@
 //! This module contains all iterator types and their implementations for the B+ tree,
 //! including basic iteration, range iteration, and optimized fast iteration.
 
+use crate::types::{BPlusTreeMap, LeafNode, NodeId, NULL_NODE};
 use std::ops::Bound;
-use crate::types::{BPlusTreeMap, NodeId, LeafNode, NULL_NODE};
 
 // ============================================================================
 // ITERATOR STRUCTS
@@ -61,7 +61,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Returns a fast iterator over all key-value pairs using unsafe arena access.
     /// This provides better performance by skipping bounds checks.
-    /// 
+    ///
     /// # Safety
     /// This is safe to use as long as the tree structure is valid and no concurrent
     /// modifications occur during iteration.
@@ -90,7 +90,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         let start_bound = start_key.map_or(Bound::Unbounded, |k| Bound::Included(k));
         let end_bound = end_key.map_or(Bound::Unbounded, |k| Bound::Excluded(k));
 
-        let (start_info, skip_first, end_info) = self.resolve_range_bounds((start_bound, end_bound));
+        let (start_info, skip_first, end_info) =
+            self.resolve_range_bounds((start_bound, end_bound));
         RangeIterator::new_with_skip_owned(self, start_info, skip_first, end_info)
     }
 }
@@ -103,7 +104,7 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
     pub fn new(tree: &'a BPlusTreeMap<K, V>) -> Self {
         // Start with the first (leftmost) leaf in the tree
         let leftmost_id = tree.get_first_leaf_id();
-        
+
         // Get the initial leaf reference if we have a starting leaf
         let current_leaf_ref = leftmost_id.and_then(|id| tree.get_leaf(id));
 
@@ -184,9 +185,9 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
     fn advance_to_next_leaf(&mut self) -> Option<bool> {
         // Use cached leaf reference to get next leaf ID
         let leaf = self.current_leaf_ref?;
-        
+
         let next_leaf_id = (leaf.next != NULL_NODE).then_some(leaf.next);
-        
+
         // Update both ID and cached reference - this is the ONLY arena access during iteration
         self.current_leaf_id = next_leaf_id;
         self.current_leaf_ref = next_leaf_id.and_then(|id| self.tree.get_leaf(id));
@@ -283,7 +284,8 @@ impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
             .map(move |(leaf_id, index)| {
                 // Create iterator with unbounded end, we'll handle bounds in the iterator itself
                 let end_bound = Bound::Unbounded;
-                let mut iter = ItemIterator::new_from_position_with_bounds(tree, leaf_id, index, end_bound);
+                let mut iter =
+                    ItemIterator::new_from_position_with_bounds(tree, leaf_id, index, end_bound);
 
                 // Set the end bound using owned key if provided
                 if let Some((key, is_inclusive)) = end_info_clone {
@@ -345,7 +347,8 @@ impl<'a, K: Ord + Clone, V: Clone> FastItemIterator<'a, K, V> {
         let leftmost_id = tree.get_first_leaf_id();
 
         // Get the initial leaf reference if we have a starting leaf
-        let current_leaf_ref = leftmost_id.and_then(|id| unsafe { Some(tree.get_leaf_unchecked(id)) });
+        let current_leaf_ref =
+            leftmost_id.and_then(|id| unsafe { Some(tree.get_leaf_unchecked(id)) });
 
         Self {
             tree,
@@ -378,7 +381,8 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for FastItemIterator<'a, K, V> {
                 // Move to next leaf - this is the ONLY arena access during iteration
                 if leaf.next != NULL_NODE {
                     self.current_leaf_id = Some(leaf.next);
-                    self.current_leaf_ref = unsafe { Some(self.tree.get_leaf_unchecked(leaf.next)) };
+                    self.current_leaf_ref =
+                        unsafe { Some(self.tree.get_leaf_unchecked(leaf.next)) };
                     self.current_leaf_index = 0;
                 } else {
                     self.finished = true;

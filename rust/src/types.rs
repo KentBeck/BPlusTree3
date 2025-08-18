@@ -3,8 +3,8 @@
 //! This module contains all the fundamental data structures, type definitions,
 //! and constants used throughout the B+ tree implementation.
 
-use std::marker::PhantomData;
 use crate::compact_arena::CompactArena;
+use std::marker::PhantomData;
 
 // ============================================================================
 // CONSTANTS

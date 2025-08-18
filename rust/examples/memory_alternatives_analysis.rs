@@ -1,9 +1,9 @@
 //! Analysis of different memory management approaches for B+ trees in Rust
 //! This explores alternatives to arena-based allocation
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::{Rc, Weak};
-use std::cell::RefCell;
 use std::time::Instant;
 
 // Alternative 1: Box-based direct allocation (simplified example)
@@ -22,7 +22,7 @@ impl<K: Ord + Clone, V: Clone> BoxNode<K, V> {
             next: None,
         }
     }
-    
+
     fn insert(&mut self, key: K, value: V) {
         match self.keys.binary_search(&key) {
             Ok(pos) => self.values[pos] = value,
@@ -32,9 +32,12 @@ impl<K: Ord + Clone, V: Clone> BoxNode<K, V> {
             }
         }
     }
-    
+
     fn get(&self, key: &K) -> Option<&V> {
-        self.keys.binary_search(key).ok().map(|pos| &self.values[pos])
+        self.keys
+            .binary_search(key)
+            .ok()
+            .map(|pos| &self.values[pos])
     }
 }
 
@@ -56,7 +59,7 @@ impl<K: Ord + Clone, V: Clone> RcNode<K, V> {
             parent: None,
         }))
     }
-    
+
     fn insert(node: &Rc<RefCell<Self>>, key: K, value: V) {
         let mut borrowed = node.borrow_mut();
         match borrowed.keys.binary_search(&key) {
@@ -67,10 +70,13 @@ impl<K: Ord + Clone, V: Clone> RcNode<K, V> {
             }
         }
     }
-    
+
     fn get(node: &Rc<RefCell<Self>>, key: &K) -> Option<V> {
         let borrowed = node.borrow();
-        borrowed.keys.binary_search(key).ok()
+        borrowed
+            .keys
+            .binary_search(key)
+            .ok()
             .map(|pos| borrowed.values[pos].clone())
     }
 }
@@ -97,7 +103,7 @@ impl<T> GenerationalArena<T> {
             generation: 0,
         }
     }
-    
+
     fn insert(&mut self, item: T) -> GenerationalIndex {
         let index = if let Some(index) = self.free_list.pop() {
             self.generation += 1;
@@ -109,22 +115,24 @@ impl<T> GenerationalArena<T> {
             self.items.push(Some((item, self.generation)));
             index
         };
-        
+
         GenerationalIndex {
             index,
             generation: self.generation,
         }
     }
-    
+
     fn get(&self, id: GenerationalIndex) -> Option<&T> {
-        self.items.get(id.index as usize)?
+        self.items
+            .get(id.index as usize)?
             .as_ref()
             .filter(|(_, gen)| *gen == id.generation)
             .map(|(item, _)| item)
     }
-    
+
     fn get_mut(&mut self, id: GenerationalIndex) -> Option<&mut T> {
-        self.items.get_mut(id.index as usize)?
+        self.items
+            .get_mut(id.index as usize)?
             .as_mut()
             .filter(|(_, gen)| *gen == id.generation)
             .map(|(item, _)| item)
@@ -134,17 +142,17 @@ impl<T> GenerationalArena<T> {
 fn main() {
     println!("Memory Management Alternatives Analysis");
     println!("======================================");
-    
+
     let size = 1000; // Smaller size for complex operations
     let iterations = 1000;
-    
+
     // Baseline: Standard BTreeMap
     println!("=== BASELINE: BTreeMap ===");
     let mut btree = BTreeMap::new();
     for i in 0..size {
         btree.insert(i, i * 2);
     }
-    
+
     let start = Instant::now();
     for _ in 0..iterations {
         for (k, v) in btree.iter() {
@@ -153,16 +161,16 @@ fn main() {
     }
     let btree_time = start.elapsed();
     println!("BTreeMap iteration: {:?}", btree_time);
-    
+
     // Alternative 1: Box-based (single linked list of leaves)
     println!("\n=== ALTERNATIVE 1: Box-based Direct Allocation ===");
     let mut box_root = Box::new(BoxNode::new());
-    
+
     // Simple insertion (would be much more complex for real B+ tree)
     for i in 0..size {
         box_root.insert(i, i * 2);
     }
-    
+
     let start = Instant::now();
     for _ in 0..iterations {
         // Iterate through the single node (simplified)
@@ -172,16 +180,19 @@ fn main() {
     }
     let box_time = start.elapsed();
     println!("Box-based iteration: {:?}", box_time);
-    println!("Ratio vs BTreeMap: {:.2}x", box_time.as_nanos() as f64 / btree_time.as_nanos() as f64);
-    
+    println!(
+        "Ratio vs BTreeMap: {:.2}x",
+        box_time.as_nanos() as f64 / btree_time.as_nanos() as f64
+    );
+
     // Alternative 2: Rc/RefCell approach
     println!("\n=== ALTERNATIVE 2: Rc/RefCell Interior Mutability ===");
     let rc_root = RcNode::new();
-    
+
     for i in 0..size {
         RcNode::insert(&rc_root, i, i * 2);
     }
-    
+
     let start = Instant::now();
     for _ in 0..iterations {
         let borrowed = rc_root.borrow();
@@ -191,18 +202,21 @@ fn main() {
     }
     let rc_time = start.elapsed();
     println!("Rc/RefCell iteration: {:?}", rc_time);
-    println!("Ratio vs BTreeMap: {:.2}x", rc_time.as_nanos() as f64 / btree_time.as_nanos() as f64);
-    
+    println!(
+        "Ratio vs BTreeMap: {:.2}x",
+        rc_time.as_nanos() as f64 / btree_time.as_nanos() as f64
+    );
+
     // Alternative 3: Generational Arena
     println!("\n=== ALTERNATIVE 3: Generational Arena ===");
     let mut gen_arena = GenerationalArena::new();
     let mut gen_indices = Vec::new();
-    
+
     for i in 0..size {
         let idx = gen_arena.insert((i, i * 2));
         gen_indices.push(idx);
     }
-    
+
     let start = Instant::now();
     for _ in 0..iterations {
         for &idx in &gen_indices {
@@ -213,21 +227,30 @@ fn main() {
     }
     let gen_time = start.elapsed();
     println!("Generational Arena iteration: {:?}", gen_time);
-    println!("Ratio vs BTreeMap: {:.2}x", gen_time.as_nanos() as f64 / btree_time.as_nanos() as f64);
-    
+    println!(
+        "Ratio vs BTreeMap: {:.2}x",
+        gen_time.as_nanos() as f64 / btree_time.as_nanos() as f64
+    );
+
     // Memory usage analysis
     println!("\n=== MEMORY USAGE ANALYSIS ===");
     println!("BTreeMap size: {} bytes", std::mem::size_of_val(&btree));
     println!("Box node size: {} bytes", std::mem::size_of_val(&*box_root));
-    println!("Rc node size: {} bytes", std::mem::size_of_val(&*rc_root.borrow()));
-    println!("Generational arena size: {} bytes", std::mem::size_of_val(&gen_arena));
-    
+    println!(
+        "Rc node size: {} bytes",
+        std::mem::size_of_val(&*rc_root.borrow())
+    );
+    println!(
+        "Generational arena size: {} bytes",
+        std::mem::size_of_val(&gen_arena)
+    );
+
     // Access pattern analysis
     println!("\n=== ACCESS PATTERN ANALYSIS ===");
-    
+
     // Random access performance
     let random_keys: Vec<i32> = (0..100).map(|i| (i * 7) % size).collect();
-    
+
     let start = Instant::now();
     for _ in 0..iterations {
         for &key in &random_keys {
@@ -236,7 +259,7 @@ fn main() {
         }
     }
     let btree_random = start.elapsed();
-    
+
     let start = Instant::now();
     for _ in 0..iterations {
         for &key in &random_keys {
@@ -245,7 +268,7 @@ fn main() {
         }
     }
     let box_random = start.elapsed();
-    
+
     let start = Instant::now();
     for _ in 0..iterations {
         for &key in &random_keys {
@@ -254,32 +277,40 @@ fn main() {
         }
     }
     let rc_random = start.elapsed();
-    
+
     println!("Random access (100 keys, {} iterations):", iterations);
     println!("  BTreeMap: {:?}", btree_random);
-    println!("  Box-based: {:?} ({:.2}x)", box_random, box_random.as_nanos() as f64 / btree_random.as_nanos() as f64);
-    println!("  Rc/RefCell: {:?} ({:.2}x)", rc_random, rc_random.as_nanos() as f64 / btree_random.as_nanos() as f64);
-    
+    println!(
+        "  Box-based: {:?} ({:.2}x)",
+        box_random,
+        box_random.as_nanos() as f64 / btree_random.as_nanos() as f64
+    );
+    println!(
+        "  Rc/RefCell: {:?} ({:.2}x)",
+        rc_random,
+        rc_random.as_nanos() as f64 / btree_random.as_nanos() as f64
+    );
+
     println!("\n=== ANALYSIS SUMMARY ===");
     println!("1. Box-based: Fastest iteration but complex tree operations");
     println!("2. Rc/RefCell: Flexible but runtime overhead from RefCell");
     println!("3. Generational: Safe but similar performance to current arena");
     println!("4. Current arena: Good balance of safety and performance");
-    
+
     println!("\n=== TRADE-OFFS ===");
     println!("Box-based:");
     println!("  + Optimal memory layout and cache behavior");
     println!("  + Zero indirection overhead");
     println!("  - Extremely difficult tree mutations in safe Rust");
     println!("  - Borrowing conflicts during rebalancing");
-    
+
     println!("\nRc/RefCell:");
     println!("  + Flexible shared ownership");
     println!("  + Easier tree mutations");
     println!("  - Runtime borrow checking overhead");
     println!("  - Reference counting overhead");
     println!("  - Potential runtime panics");
-    
+
     println!("\nGenerational Arena:");
     println!("  + Better safety than raw indices");
     println!("  + Prevents use-after-free");

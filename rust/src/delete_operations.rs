@@ -5,7 +5,7 @@
 //! managing the tree structure during deletions.
 
 use crate::error::{BPlusTreeError, ModifyResult};
-use crate::types::{BPlusTreeMap, NodeRef, LeafNode, NodeId, RemoveResult};
+use crate::types::{BPlusTreeMap, LeafNode, NodeId, NodeRef, RemoveResult};
 use std::marker::PhantomData;
 
 impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
@@ -401,8 +401,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         // Cannot borrow or merge - leave the node underfull
         // This can happen when siblings are also near minimum capacity
         true
-    }   
- /// Merge branch with left sibling
+    }
+    /// Merge branch with left sibling
     fn merge_with_left_branch(&mut self, parent_id: NodeId, child_index: usize) -> bool {
         // Get the branch IDs and collect all needed info from parent in one access
         let (left_id, child_id, separator_key) = match self.get_branch(parent_id) {
@@ -506,8 +506,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.deallocate_branch(right_id);
 
         true // Child still exists
-    }  
-  /// Borrow from left sibling branch
+    }
+    /// Borrow from left sibling branch
     fn borrow_from_left_branch(&mut self, parent_id: NodeId, child_index: usize) -> bool {
         // Get the branch IDs and collect all needed info from parent in one access
         let (left_id, child_id, separator_key) = match self.get_branch(parent_id) {
@@ -589,8 +589,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         parent.keys[child_index] = new_separator;
 
         true
-    }   
- /// Borrow from left sibling leaf
+    }
+    /// Borrow from left sibling leaf
     fn borrow_from_left_leaf(&mut self, branch_id: NodeId, child_index: usize) -> bool {
         // Extract leaf IDs from parent in one access (inlined get_adjacent_leaf_ids logic)
         let (left_id, child_id) = match self.get_branch(branch_id) {

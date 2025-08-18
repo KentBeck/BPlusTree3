@@ -3,9 +3,9 @@
 //! This module contains all range-related operations including range iteration,
 //! bounds resolution, and range optimization algorithms.
 
-use std::ops::{Bound, RangeBounds};
-use crate::types::{BPlusTreeMap, NodeRef, NodeId};
 use crate::iteration::RangeIterator;
+use crate::types::{BPlusTreeMap, NodeId, NodeRef};
+use std::ops::{Bound, RangeBounds};
 
 // ============================================================================
 // RANGE QUERY OPERATIONS
@@ -69,11 +69,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     pub fn resolve_range_bounds<R>(
         &self,
         range: R,
-    ) -> (
-        Option<(NodeId, usize)>,
-        bool,
-        Option<(K, bool)>,
-    )
+    ) -> (Option<(NodeId, usize)>, bool, Option<(K, bool)>)
     where
         R: RangeBounds<K>,
     {
@@ -109,8 +105,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     if let Some(leaf) = self.get_leaf(*leaf_id) {
                         // Find the position where this key would be inserted
                         let index = match leaf.binary_search_keys(key) {
-                            Ok(idx) => idx,     // Key found at exact position
-                            Err(idx) => idx,    // Key would be inserted at this position
+                            Ok(idx) => idx,  // Key found at exact position
+                            Err(idx) => idx, // Key would be inserted at this position
                         };
                         return Some((*leaf_id, index));
                     } else {
@@ -171,7 +167,11 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             match current {
                 NodeRef::Leaf(leaf_id, _) => {
                     if let Some(leaf) = self.get_leaf(*leaf_id) {
-                        let last_index = if leaf.keys_is_empty() { 0 } else { leaf.keys_len() - 1 };
+                        let last_index = if leaf.keys_is_empty() {
+                            0
+                        } else {
+                            leaf.keys_len() - 1
+                        };
                         return Some((*leaf_id, last_index));
                     } else {
                         return None;

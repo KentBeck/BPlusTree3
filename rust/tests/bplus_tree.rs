@@ -2244,23 +2244,13 @@ fn test_batch_insert() {
 
     // Successful batch insert
     let items = vec![(1, "one"), (2, "two"), (3, "three")];
-    let result = tree.batch_insert(
-        items
-            .iter()
-            .map(|(k, v)| (*k, v.to_string()))
-            .collect(),
-    );
+    let result = tree.batch_insert(items.iter().map(|(k, v)| (*k, v.to_string())).collect());
     assert!(result.is_ok());
     assert_eq!(tree.len(), 3);
 
     // Batch insert with duplicates
     let items2 = vec![(4, "four"), (2, "TWO"), (5, "five")];
-    let result2 = tree.batch_insert(
-        items2
-            .iter()
-            .map(|(k, v)| (*k, v.to_string()))
-            .collect(),
-    );
+    let result2 = tree.batch_insert(items2.iter().map(|(k, v)| (*k, v.to_string())).collect());
     assert!(result2.is_ok());
     assert_eq!(tree.len(), 5);
     assert_eq!(tree.get(&2), Some(&"TWO".to_string()));
@@ -2277,7 +2267,10 @@ fn test_get_many() {
     let keys = vec![1, 3];
     let result = tree.get_many(&keys);
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), vec![&"one".to_string(), &"three".to_string()]);
+    assert_eq!(
+        result.unwrap(),
+        vec![&"one".to_string(), &"three".to_string()]
+    );
 
     // get_many with missing key
     let keys2 = vec![1, 4, 2];

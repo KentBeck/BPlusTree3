@@ -4,7 +4,7 @@
 //! including all their methods for insertion, deletion, splitting, merging, and
 //! other node-level operations.
 
-use crate::types::{LeafNode, BranchNode, NodeRef, NodeId, NULL_NODE, InsertResult, SplitNodeData};
+use crate::types::{BranchNode, InsertResult, LeafNode, NodeId, NodeRef, SplitNodeData, NULL_NODE};
 
 // ============================================================================
 // LEAF NODE IMPLEMENTATION

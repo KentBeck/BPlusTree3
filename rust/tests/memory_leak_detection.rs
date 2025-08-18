@@ -122,8 +122,12 @@ fn test_memory_leak_regression_prevention() {
     );
 
     // Calculate potential leaks
-    let leaf_leak = final_leaf_stats.allocated_count.saturating_sub(final_tree_leaves);
-    let branch_leak = final_branch_stats.allocated_count.saturating_sub(final_tree_branches);
+    let leaf_leak = final_leaf_stats
+        .allocated_count
+        .saturating_sub(final_tree_leaves);
+    let branch_leak = final_branch_stats
+        .allocated_count
+        .saturating_sub(final_tree_branches);
 
     if leaf_leak > 0 {
         println!("❌ LEAF MEMORY LEAK DETECTED: {} leaked nodes", leaf_leak);
@@ -162,7 +166,8 @@ fn test_root_split_no_memory_accumulation() {
             tree.insert(i, format!("value_{}", i));
         }
 
-        let allocated = tree.leaf_arena_stats().allocated_count + tree.branch_arena_stats().allocated_count;
+        let allocated =
+            tree.leaf_arena_stats().allocated_count + tree.branch_arena_stats().allocated_count;
         let (tree_leaves, tree_branches) = tree.count_nodes_in_tree();
         let in_tree = tree_leaves + tree_branches;
 
@@ -256,7 +261,8 @@ fn test_stress_allocation_deallocation_cycles() {
 
         // Every few cycles, check for leaks
         if cycle % 5 == 4 {
-            let allocated = tree.leaf_arena_stats().allocated_count + tree.branch_arena_stats().allocated_count;
+            let allocated =
+                tree.leaf_arena_stats().allocated_count + tree.branch_arena_stats().allocated_count;
             let (tree_leaves, tree_branches) = tree.count_nodes_in_tree();
             let in_tree = tree_leaves + tree_branches;
 
@@ -312,7 +318,8 @@ fn test_edge_case_memory_scenarios() {
 
         deletion_range_attack(&mut tree, 10, 40);
 
-        let allocated = tree.leaf_arena_stats().allocated_count + tree.branch_arena_stats().allocated_count;
+        let allocated =
+            tree.leaf_arena_stats().allocated_count + tree.branch_arena_stats().allocated_count;
         let (tree_leaves, tree_branches) = tree.count_nodes_in_tree();
         let in_tree = tree_leaves + tree_branches;
         assert_eq!(allocated, in_tree, "Minimum capacity leak");
@@ -329,7 +336,8 @@ fn test_edge_case_memory_scenarios() {
             tree.insert(i, format!("large_cap_{}", i));
         }
 
-        let allocated = tree.leaf_arena_stats().allocated_count + tree.branch_arena_stats().allocated_count;
+        let allocated =
+            tree.leaf_arena_stats().allocated_count + tree.branch_arena_stats().allocated_count;
         let (tree_leaves, tree_branches) = tree.count_nodes_in_tree();
         let in_tree = tree_leaves + tree_branches;
         assert_eq!(allocated, in_tree, "Large capacity leak");

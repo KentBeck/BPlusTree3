@@ -10,21 +10,21 @@ macro_rules! assert_tree_valid {
             panic!("Tree invariants violated: {}", e);
         }
     };
-    
+
     // Invariant check with context
     ($tree:expr, $context:expr) => {
         if let Err(e) = $tree.check_invariants_detailed() {
             panic!("ATTACK SUCCESSFUL in {}: {}", $context, e);
         }
     };
-    
+
     // Invariant check with context and cycle number
     ($tree:expr, $context:expr, $cycle:expr) => {
         if let Err(e) = $tree.check_invariants_detailed() {
             panic!("ATTACK SUCCESSFUL at {} cycle {}: {}", $context, $cycle, e);
         }
     };
-    
+
     // Invariant check with custom message format
     ($tree:expr, $fmt:expr, $($arg:tt)*) => {
         if let Err(e) = $tree.check_invariants_detailed() {
@@ -89,7 +89,7 @@ macro_rules! create_test_tree {
     ($capacity:expr) => {
         BPlusTreeMap::new($capacity).expect("Failed to create test tree")
     };
-    
+
     // Tree with capacity and initial data
     ($capacity:expr, $count:expr) => {{
         let mut tree = BPlusTreeMap::new($capacity).expect("Failed to create test tree");
@@ -98,7 +98,7 @@ macro_rules! create_test_tree {
         }
         tree
     }};
-    
+
     // Tree with capacity and custom data
     ($capacity:expr, $data:expr) => {{
         let mut tree = BPlusTreeMap::new($capacity).expect("Failed to create test tree");
@@ -118,31 +118,31 @@ macro_rules! attack_pattern {
         for i in 0..10 {
             $tree.insert($cycle * 10 + i, format!("v{}-{}", $cycle, i));
         }
-        
+
         // Delete most items to free nodes
         for i in 0..8 {
             $tree.remove(&($cycle * 10 + i));
         }
     };
-    
+
     // Fragmentation attack
     (fragmentation, $tree:expr, $base_key:expr) => {
         // Insert in a pattern that creates and frees nodes in specific order
         for i in 0..50 {
             $tree.insert($base_key + i * 10, format!("fragmented-{}", i));
         }
-        
+
         // Delete every other item
         for i in (0..50).step_by(2) {
             $tree.remove(&($base_key + i * 10));
         }
-        
+
         // Reinsert to reuse freed slots
         for i in 0..25 {
             $tree.insert($base_key + i * 10 + 5, format!("reused-{}", i * 1000));
         }
     };
-    
+
     // Deep tree creation
     (deep_tree, $tree:expr, $capacity:expr) => {
         let mut key = 0;
@@ -163,27 +163,30 @@ macro_rules! verify_attack_result {
     ($tree:expr, $context:expr) => {
         assert_tree_valid!($tree, $context);
     };
-    
+
     // Verification with ordering check
     ($tree:expr, $context:expr, ordering) => {
         assert_tree_valid!($tree, $context);
         let items: Vec<_> = $tree.items().collect();
         for i in 1..items.len() {
-            if items[i-1].0 >= items[i].0 {
+            if items[i - 1].0 >= items[i].0 {
                 panic!("ATTACK SUCCESSFUL: Items out of order in {}!", $context);
             }
         }
     };
-    
+
     // Verification with item count check
     ($tree:expr, $context:expr, count = $expected:expr) => {
         assert_tree_valid!($tree, $context);
         let actual = $tree.len();
         if actual != $expected {
-            panic!("ATTACK SUCCESSFUL in {}: Expected {} items, got {}", $context, $expected, actual);
+            panic!(
+                "ATTACK SUCCESSFUL in {}: Expected {} items, got {}",
+                $context, $expected, actual
+            );
         }
     };
-    
+
     // Full verification (invariants + ordering + count)
     ($tree:expr, $context:expr, full = $expected:expr) => {
         verify_attack_result!($tree, $context, count = $expected);
@@ -207,7 +210,7 @@ macro_rules! stress_test {
 macro_rules! process_range_bounds {
     ($range:expr) => {{
         use std::ops::Bound;
-        
+
         let start = match $range.start_bound() {
             Bound::Included(key) => Some(key),
             Bound::Excluded(_) => return Err("Excluded start bounds not supported".into()),
@@ -219,7 +222,7 @@ macro_rules! process_range_bounds {
             Bound::Excluded(key) => Some(key),
             Bound::Unbounded => None,
         };
-        
+
         (start, end)
     }};
 }
@@ -254,7 +257,8 @@ mod tests {
 
         // Test with custom data
         let data = vec![(1, "one".to_string()), (2, "two".to_string())];
-        let mut tree3: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).expect("Failed to create test tree");
+        let mut tree3: BPlusTreeMap<i32, String> =
+            BPlusTreeMap::new(4).expect("Failed to create test tree");
         for (key, value) in data {
             tree3.insert(key, value);
         }
@@ -264,13 +268,13 @@ mod tests {
     #[test]
     fn test_attack_pattern_macro() {
         let mut tree = BPlusTreeMap::new(4).unwrap();
-        
+
         // Test arena exhaustion pattern
         attack_pattern!(arena_exhaustion, tree, 0);
         assert_eq!(tree.len(), 2); // Should have 2 items left
-        
+
         tree.clear();
-        
+
         // Test fragmentation pattern
         attack_pattern!(fragmentation, tree, 0);
         assert_eq!(tree.len(), 50); // Should have 50 items
@@ -282,16 +286,16 @@ mod tests {
         for i in 0..10 {
             tree.insert(i, format!("value_{}", i));
         }
-        
+
         // Test basic verification
         verify_attack_result!(tree, "basic test");
-        
+
         // Test with ordering check
         verify_attack_result!(tree, "ordering test", ordering);
-        
+
         // Test with count check
         verify_attack_result!(tree, "count test", count = 10);
-        
+
         // Test full verification
         verify_attack_result!(tree, "full test", full = 10);
     }

@@ -4,9 +4,9 @@
 //! for the B+ tree and its nodes. This includes capacity validation,
 //! arena initialization, and default implementations.
 
-use crate::error::{BPlusTreeError, BTreeResult};
-use crate::types::{BPlusTreeMap, LeafNode, BranchNode, NodeRef, MIN_CAPACITY, NULL_NODE};
 use crate::compact_arena::CompactArena;
+use crate::error::{BPlusTreeError, BTreeResult};
+use crate::types::{BPlusTreeMap, BranchNode, LeafNode, NodeRef, MIN_CAPACITY, NULL_NODE};
 use std::marker::PhantomData;
 
 /// Result type for initialization operations
@@ -96,7 +96,7 @@ impl<K, V> BPlusTreeMap<K, V> {
         // For empty tree, we still need a root - create an empty leaf
         let mut leaf_arena = CompactArena::new();
         let root_id = leaf_arena.allocate(LeafNode::new(capacity));
-        
+
         Ok(Self {
             capacity,
             root: NodeRef::Leaf(root_id, PhantomData),

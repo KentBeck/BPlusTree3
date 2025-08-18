@@ -1,5 +1,5 @@
 use bplustree::BPlusTreeMap;
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use rand::prelude::*;
 use std::collections::BTreeMap;
 
@@ -396,7 +396,9 @@ fn bench_range_edge_cases(c: &mut Criterion) {
 
     group.bench_function("small_range_end_BPlusTreeMap", |b| {
         b.iter(|| {
-            for (key, value) in bplus.items_range(Some(&black_box(size - 10)), Some(&black_box(size))) {
+            for (key, value) in
+                bplus.items_range(Some(&black_box(size - 10)), Some(&black_box(size)))
+            {
                 black_box((key, value));
             }
         });
