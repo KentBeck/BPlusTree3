@@ -153,7 +153,7 @@ impl<T> CompactArena<T> {
     }
 
     /// Unsafe fast access without bounds checking or allocation verification
-    /// 
+    ///
     /// # Safety
     /// Caller must ensure id is valid and allocated
     pub unsafe fn get_unchecked(&self, id: NodeId) -> &T {
@@ -162,7 +162,7 @@ impl<T> CompactArena<T> {
     }
 
     /// Unsafe fast mutable access without bounds checking or allocation verification
-    /// 
+    ///
     /// # Safety
     /// Caller must ensure id is valid and allocated
     pub unsafe fn get_unchecked_mut(&mut self, id: NodeId) -> &mut T {
@@ -473,7 +473,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ============================================================================
 
     /// Unsafe fast access to leaf node (no bounds checking)
-    /// 
+    ///
     /// # Safety
     /// Caller must ensure id is valid and allocated
     pub unsafe fn get_leaf_unchecked(&self, id: NodeId) -> &LeafNode<K, V> {
@@ -481,7 +481,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Unsafe fast access to branch node (no bounds checking)
-    /// 
+    ///
     /// # Safety
     /// Caller must ensure id is valid and allocated
     pub unsafe fn get_branch_unchecked(&self, id: NodeId) -> &BranchNode<K, V> {

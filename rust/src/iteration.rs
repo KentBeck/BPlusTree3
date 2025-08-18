@@ -347,8 +347,7 @@ impl<'a, K: Ord + Clone, V: Clone> FastItemIterator<'a, K, V> {
         let leftmost_id = tree.get_first_leaf_id();
 
         // Get the initial leaf reference if we have a starting leaf
-        let current_leaf_ref =
-            leftmost_id.map(|id| unsafe { tree.get_leaf_unchecked(id) });
+        let current_leaf_ref = leftmost_id.map(|id| unsafe { tree.get_leaf_unchecked(id) });
 
         Self {
             tree,

@@ -158,15 +158,11 @@ fn test_startup_vs_iteration(
     // Test large ranges (startup + iteration cost)
     let large_size = 10000;
     let btree_large_start = Instant::now();
-    let btree_large_count = btree
-        .range(start_key..start_key + large_size)
-        .count();
+    let btree_large_count = btree.range(start_key..start_key + large_size).count();
     let btree_large_time = btree_large_start.elapsed();
 
     let bplus_large_start = Instant::now();
-    let bplus_large_count = bplus
-        .range(start_key..start_key + large_size)
-        .count();
+    let bplus_large_count = bplus.range(start_key..start_key + large_size).count();
     let bplus_large_time = bplus_large_start.elapsed();
 
     println!("Range Type        | BTreeMap  | BPlusTree | Ratio | Analysis");

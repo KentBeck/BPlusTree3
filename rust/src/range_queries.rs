@@ -69,10 +69,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ============================================================================
 
     /// Resolve range bounds into start position, skip flag, and end information.
-    pub fn resolve_range_bounds<R>(
-        &self,
-        range: R,
-    ) -> RangeAnalysisResult<K>
+    pub fn resolve_range_bounds<R>(&self, range: R) -> RangeAnalysisResult<K>
     where
         R: RangeBounds<K>,
     {
