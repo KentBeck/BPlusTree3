@@ -385,12 +385,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.branch_arena.allocate(branch)
     }
 
-    /// Allocate a new compressed branch node in the arena and return its ID.
-    #[inline]
-    pub fn allocate_compressed_branch(&mut self, branch: crate::compressed_branch::CompressedBranchNode<K, V>) -> NodeId {
-        self.compressed_branch_arena.allocate(branch)
-    }
-
+    
     /// Deallocate a leaf node from the arena.
     #[inline]
     pub fn deallocate_leaf(&mut self, id: NodeId) -> Option<LeafNode<K, V>> {

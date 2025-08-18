@@ -84,8 +84,6 @@ pub struct BPlusTreeMap<K, V> {
     pub(crate) leaf_arena: CompactArena<LeafNode<K, V>>,
     /// Compact arena storage for branch nodes (eliminates Option wrapper overhead).
     pub(crate) branch_arena: CompactArena<BranchNode<K, V>>,
-    /// Compact arena storage for compressed branch nodes.
-    pub(crate) compressed_branch_arena: CompactArena<crate::compressed_branch::CompressedBranchNode<K, V>>,
 }
 
 /// Leaf node containing key-value pairs.
@@ -102,9 +100,6 @@ pub struct LeafNode<K, V> {
 }
 
 // Type aliases for different use cases
-/// High-performance leaf node for Copy types (cache-optimized)
-pub type FastLeafNode<K, V> = crate::compressed_node::CompressedLeafNode<K, V>;
-
 /// Flexible leaf node for Clone types (compatibility)
 pub type FlexibleLeafNode<K, V> = LeafNode<K, V>;
 
@@ -114,17 +109,13 @@ pub trait OptimalLeafNode<K, V> {
     type Node;
 }
 
-// For Copy types, use CompressedLeafNode
+// For all types, use regular LeafNode (compressed nodes removed due to memory safety concerns)
 impl<K, V> OptimalLeafNode<K, V> for (K, V)
 where
-    K: Copy + Ord,
-    V: Copy,
+    K: Ord,
 {
-    type Node = crate::compressed_node::CompressedLeafNode<K, V>;
+    type Node = LeafNode<K, V>;
 }
-
-// For non-Copy types, use regular LeafNode  
-// (This would require more complex trait bounds, but shows the concept)
 
 /// Internal (branch) node containing keys and child pointers.
 #[derive(Debug, Clone)]
@@ -175,7 +166,6 @@ impl<K, V> NodeRef<K, V> {
 pub enum SplitNodeData<K, V> {
     Leaf(LeafNode<K, V>),
     Branch(BranchNode<K, V>),
-    CompressedBranch(crate::compressed_branch::CompressedBranchNode<K, V>),
 }
 
 /// Result of an insertion operation on a node.

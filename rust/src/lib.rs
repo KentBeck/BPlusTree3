@@ -8,8 +8,6 @@
 // Import our new modules
 // arena.rs removed - only compact_arena.rs is used
 mod compact_arena;
-mod compressed_node;
-mod compressed_branch;
 mod error;
 mod macros;
 mod types;
