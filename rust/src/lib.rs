@@ -2,6 +2,8 @@
 //!
 //! This module provides a B+ tree data structure with a dictionary-like interface,
 //! supporting efficient insertion, deletion, lookup, and range queries.
+//!
+//! Updated: Compressed node implementations removed due to memory safety concerns.
 
 // Range imports moved to range_queries.rs module
 
