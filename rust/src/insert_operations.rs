@@ -72,6 +72,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                                 let new_id = self.allocate_branch(new_branch_data);
                                 NodeRef::Branch(new_id, PhantomData)
                             }
+                            SplitNodeData::CompressedBranch(new_compressed_branch_data) => {
+                                let new_id = self.allocate_compressed_branch(new_compressed_branch_data);
+                                NodeRef::Branch(new_id, PhantomData)
+                            }
                         };
 
                         // Insert into this branch
@@ -158,6 +162,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     }
                     SplitNodeData::Branch(new_branch_data) => {
                         let new_id = self.allocate_branch(new_branch_data);
+                        NodeRef::Branch(new_id, PhantomData)
+                    }
+                    SplitNodeData::CompressedBranch(new_compressed_branch_data) => {
+                        let new_id = self.allocate_compressed_branch(new_compressed_branch_data);
                         NodeRef::Branch(new_id, PhantomData)
                     }
                 };

@@ -46,11 +46,15 @@ impl<K, V> BPlusTreeMap<K, V> {
         // Initialize compact branch arena (starts empty)
         let branch_arena = CompactArena::new();
 
+        // Initialize compressed branch arena (starts empty)
+        let compressed_branch_arena = CompactArena::new();
+
         Ok(Self {
             capacity,
             root: NodeRef::Leaf(root_id, PhantomData),
             leaf_arena,
             branch_arena,
+            compressed_branch_arena,
         })
     }
 
@@ -102,6 +106,7 @@ impl<K, V> BPlusTreeMap<K, V> {
             root: NodeRef::Leaf(root_id, PhantomData),
             leaf_arena,
             branch_arena: CompactArena::new(),
+            compressed_branch_arena: CompactArena::new(),
         })
     }
 }

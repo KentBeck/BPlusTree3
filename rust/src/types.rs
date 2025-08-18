@@ -84,6 +84,8 @@ pub struct BPlusTreeMap<K, V> {
     pub(crate) leaf_arena: CompactArena<LeafNode<K, V>>,
     /// Compact arena storage for branch nodes (eliminates Option wrapper overhead).
     pub(crate) branch_arena: CompactArena<BranchNode<K, V>>,
+    /// Compact arena storage for compressed branch nodes.
+    pub(crate) compressed_branch_arena: CompactArena<crate::compressed_branch::CompressedBranchNode<K, V>>,
 }
 
 /// Leaf node containing key-value pairs.
@@ -140,11 +142,19 @@ pub struct BranchNode<K, V> {
 // ============================================================================
 
 /// Node reference that can be either a leaf or branch node
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum NodeRef<K, V> {
     Leaf(NodeId, PhantomData<(K, V)>),
     Branch(NodeId, PhantomData<(K, V)>),
 }
+
+impl<K, V> Clone for NodeRef<K, V> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<K, V> Copy for NodeRef<K, V> {}
 
 impl<K, V> NodeRef<K, V> {
     /// Return the raw node ID.
@@ -165,6 +175,7 @@ impl<K, V> NodeRef<K, V> {
 pub enum SplitNodeData<K, V> {
     Leaf(LeafNode<K, V>),
     Branch(BranchNode<K, V>),
+    CompressedBranch(crate::compressed_branch::CompressedBranchNode<K, V>),
 }
 
 /// Result of an insertion operation on a node.
