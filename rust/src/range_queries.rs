@@ -7,6 +7,9 @@ use crate::iteration::RangeIterator;
 use crate::types::{BPlusTreeMap, NodeId, NodeRef};
 use std::ops::{Bound, RangeBounds};
 
+/// Type alias for complex range analysis result
+type RangeAnalysisResult<K> = (Option<(NodeId, usize)>, bool, Option<(K, bool)>);
+
 // ============================================================================
 // RANGE QUERY OPERATIONS
 // ============================================================================
@@ -69,7 +72,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     pub fn resolve_range_bounds<R>(
         &self,
         range: R,
-    ) -> (Option<(NodeId, usize)>, bool, Option<(K, bool)>)
+    ) -> RangeAnalysisResult<K>
     where
         R: RangeBounds<K>,
     {

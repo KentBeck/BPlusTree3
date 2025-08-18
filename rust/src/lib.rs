@@ -133,32 +133,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     ///
     /// * `key` - The key to look up
     ///
-    // GET operations moved to get_operations.rs module
-
-    // Helper methods moved to delete_operations.rs module
-
-    // ============================================================================
-    // INSERT OPERATIONS
-    // ============================================================================
-
-    // insert method moved to insert_operations.rs module
-
-    // ============================================================================
-    // HELPERS FOR INSERT OPERATIONS
-    // ============================================================================
-
-    // new_root method moved to insert_operations.rs module
-
-    // insert_recursive method moved to insert_operations.rs module
-
-    // ============================================================================
-    // DELETE OPERATIONS
-    // ============================================================================
-
-    // remove and remove_item methods moved to delete_operations.rs module
-
-    // try_get method moved to get_operations.rs module
-
     /// Insert with comprehensive error handling and rollback on failure
     pub fn try_insert(&mut self, key: K, value: V) -> ModifyResult<Option<V>>
     where

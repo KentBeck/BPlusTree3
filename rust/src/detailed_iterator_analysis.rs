@@ -81,12 +81,10 @@ fn compare_iterator_implementations(bplus: &BPlusTreeMap<usize, usize>, size: us
     // Test regular ItemIterator
     let start_time = Instant::now();
     for _ in 0..iterations {
-        let mut count = 0;
-        for (_k, _v) in bplus.items() {
+        for (count, (_k, _v)) in bplus.items().enumerate() {
             if count >= 1000 {
                 break;
             }
-            count += 1;
         }
     }
     let regular_time = start_time.elapsed();
@@ -94,12 +92,10 @@ fn compare_iterator_implementations(bplus: &BPlusTreeMap<usize, usize>, size: us
     // Test FastItemIterator
     let start_time = Instant::now();
     for _ in 0..iterations {
-        let mut count = 0;
-        for (_k, _v) in bplus.items_fast() {
+        for (count, (_k, _v)) in bplus.items_fast().enumerate() {
             if count >= 1000 {
                 break;
             }
-            count += 1;
         }
     }
     let fast_time = start_time.elapsed();

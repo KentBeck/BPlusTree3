@@ -67,8 +67,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                                 // Update linked list pointers for leaf splits
                                 // Update linked list pointers for leaf splits using Option combinators
                                 if let NodeRef::Leaf(original_id, _) = child_ref {
-                                    self.get_leaf_mut(original_id)
-                                        .map(|original_leaf| original_leaf.next = new_id);
+                                    if let Some(original_leaf) = self.get_leaf_mut(original_id) {
+                                        original_leaf.next = new_id;
+                                    }
                                 }
 
                                 NodeRef::Leaf(new_id, PhantomData)

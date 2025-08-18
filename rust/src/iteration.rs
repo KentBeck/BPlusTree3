@@ -55,7 +55,7 @@ pub struct RangeIterator<'a, K, V> {
 
 impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Returns an iterator over all key-value pairs in sorted order.
-    pub fn items(&self) -> ItemIterator<K, V> {
+    pub fn items(&self) -> ItemIterator<'_, K, V> {
         ItemIterator::new(self)
     }
 
@@ -65,17 +65,17 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// # Safety
     /// This is safe to use as long as the tree structure is valid and no concurrent
     /// modifications occur during iteration.
-    pub fn items_fast(&self) -> FastItemIterator<K, V> {
+    pub fn items_fast(&self) -> FastItemIterator<'_, K, V> {
         FastItemIterator::new(self)
     }
 
     /// Returns an iterator over all keys in sorted order.
-    pub fn keys(&self) -> KeyIterator<K, V> {
+    pub fn keys(&self) -> KeyIterator<'_, K, V> {
         KeyIterator::new(self)
     }
 
     /// Returns an iterator over all values in key order.
-    pub fn values(&self) -> ValueIterator<K, V> {
+    pub fn values(&self) -> ValueIterator<'_, K, V> {
         ValueIterator::new(self)
     }
 
@@ -87,8 +87,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         start_key: Option<&K>,
         end_key: Option<&'a K>,
     ) -> RangeIterator<'a, K, V> {
-        let start_bound = start_key.map_or(Bound::Unbounded, |k| Bound::Included(k));
-        let end_bound = end_key.map_or(Bound::Unbounded, |k| Bound::Excluded(k));
+        let start_bound = start_key.map_or(Bound::Unbounded, Bound::Included);
+        let end_bound = end_key.map_or(Bound::Unbounded, Bound::Excluded);
 
         let (start_info, skip_first, end_info) =
             self.resolve_range_bounds((start_bound, end_bound));
@@ -348,7 +348,7 @@ impl<'a, K: Ord + Clone, V: Clone> FastItemIterator<'a, K, V> {
 
         // Get the initial leaf reference if we have a starting leaf
         let current_leaf_ref =
-            leftmost_id.and_then(|id| unsafe { Some(tree.get_leaf_unchecked(id)) });
+            leftmost_id.map(|id| unsafe { tree.get_leaf_unchecked(id) });
 
         Self {
             tree,

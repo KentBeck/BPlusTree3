@@ -95,7 +95,7 @@ impl<T> CompactArena<T> {
         self.free_list.push(index);
 
         // Replace with default and return the old value
-        let old_value = std::mem::replace(&mut self.storage[index], T::default());
+        let old_value = std::mem::take(&mut self.storage[index]);
         Some(old_value)
     }
 
@@ -153,14 +153,18 @@ impl<T> CompactArena<T> {
     }
 
     /// Unsafe fast access without bounds checking or allocation verification
-    /// SAFETY: Caller must ensure id is valid and allocated
+    /// 
+    /// # Safety
+    /// Caller must ensure id is valid and allocated
     pub unsafe fn get_unchecked(&self, id: NodeId) -> &T {
         let index = id as usize;
         self.storage.get_unchecked(index)
     }
 
     /// Unsafe fast mutable access without bounds checking or allocation verification
-    /// SAFETY: Caller must ensure id is valid and allocated
+    /// 
+    /// # Safety
+    /// Caller must ensure id is valid and allocated
     pub unsafe fn get_unchecked_mut(&mut self, id: NodeId) -> &mut T {
         let index = id as usize;
         self.storage.get_unchecked_mut(index)
@@ -305,7 +309,7 @@ impl<T: Default> CompactArena<T> {
         self.allocated_mask[index] = false;
         self.free_list.push(index);
 
-        let old_value = std::mem::replace(&mut self.storage[index], T::default());
+        let old_value = std::mem::take(&mut self.storage[index]);
         Some(old_value)
     }
 }
@@ -469,13 +473,17 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ============================================================================
 
     /// Unsafe fast access to leaf node (no bounds checking)
-    /// SAFETY: Caller must ensure id is valid and allocated
+    /// 
+    /// # Safety
+    /// Caller must ensure id is valid and allocated
     pub unsafe fn get_leaf_unchecked(&self, id: NodeId) -> &LeafNode<K, V> {
         self.leaf_arena.get_unchecked(id)
     }
 
     /// Unsafe fast access to branch node (no bounds checking)
-    /// SAFETY: Caller must ensure id is valid and allocated
+    /// 
+    /// # Safety
+    /// Caller must ensure id is valid and allocated
     pub unsafe fn get_branch_unchecked(&self, id: NodeId) -> &BranchNode<K, V> {
         self.branch_arena.get_unchecked(id)
     }

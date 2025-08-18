@@ -62,7 +62,7 @@ fn test_range_sizes(
     println!("-----------|---------------|----------------|------------------");
 
     for &range_size in &range_sizes {
-        let end_key = start_key + range_size as i32;
+        let end_key = start_key + range_size;
 
         // BTreeMap range
         let btree_start = Instant::now();
@@ -159,13 +159,13 @@ fn test_startup_vs_iteration(
     let large_size = 10000;
     let btree_large_start = Instant::now();
     let btree_large_count = btree
-        .range(start_key..start_key + large_size as i32)
+        .range(start_key..start_key + large_size)
         .count();
     let btree_large_time = btree_large_start.elapsed();
 
     let bplus_large_start = Instant::now();
     let bplus_large_count = bplus
-        .range(start_key..start_key + large_size as i32)
+        .range(start_key..start_key + large_size)
         .count();
     let bplus_large_time = bplus_large_start.elapsed();
 

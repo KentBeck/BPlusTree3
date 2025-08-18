@@ -8,11 +8,11 @@ fn main() {
     let tree_size = 100_000;
     let mut tree = BPlusTreeMap::new(16).unwrap();
     for i in 0..tree_size {
-        tree.insert(i as i32, format!("value_{}", i));
+        tree.insert(i, format!("value_{}", i));
     }
 
     let range_size = 10_000;
-    let start_key = (tree_size / 2) as i32;
+    let start_key = tree_size / 2;
     let end_key = start_key + range_size;
 
     println!(

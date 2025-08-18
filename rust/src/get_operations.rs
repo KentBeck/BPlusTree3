@@ -133,7 +133,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// assert_eq!(tree.get(&1), Some(&"ONE"));
     /// ```
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        let root = self.root.clone();
+        let root = self.root;
         self.get_mut_recursive(&root, key)
     }
 

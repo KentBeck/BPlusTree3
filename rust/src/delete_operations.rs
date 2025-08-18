@@ -139,9 +139,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 }
                 None => {
                     // Handle missing branch or already leaf root
-                    root_branch_id
-                        .filter(|_| true) // Branch ID exists but branch is missing
-                        .map(|_| self.create_empty_root_leaf());
+                    if root_branch_id.filter(|_| true).is_some() {
+                        // Branch ID exists but branch is missing
+                        self.create_empty_root_leaf();
+                    }
                     break;
                 }
             }
@@ -671,9 +672,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             .and_then(|right_leaf| right_leaf.first_key().cloned());
 
         // Use Option combinators for nested conditional update
-        new_separator
-            .zip(self.get_branch_mut(branch_id))
-            .map(|(sep, branch)| branch.keys[child_index] = sep);
+        if let Some((sep, branch)) = new_separator.zip(self.get_branch_mut(branch_id)) {
+            branch.keys[child_index] = sep;
+        }
 
         true
     }

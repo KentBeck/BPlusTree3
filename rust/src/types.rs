@@ -100,22 +100,9 @@ pub struct LeafNode<K, V> {
 }
 
 // Type aliases for different use cases
-/// Flexible leaf node for Clone types (compatibility)
-pub type FlexibleLeafNode<K, V> = LeafNode<K, V>;
-
-// Conditional type selection based on traits
-/// Automatically select the best leaf node type based on trait bounds
-pub trait OptimalLeafNode<K, V> {
-    type Node;
-}
-
-// For all types, use regular LeafNode (compressed nodes removed due to memory safety concerns)
-impl<K, V> OptimalLeafNode<K, V> for (K, V)
-where
-    K: Ord,
-{
-    type Node = LeafNode<K, V>;
-}
+// Note: FlexibleLeafNode and OptimalLeafNode removed as they were unused
+// after compressed node removal. Future specialized implementations may
+// reintroduce these concepts for specific use cases.
 
 /// Internal (branch) node containing keys and child pointers.
 #[derive(Debug, Clone)]

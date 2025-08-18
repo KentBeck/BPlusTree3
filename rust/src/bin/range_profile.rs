@@ -35,7 +35,7 @@ fn test_range_sizes(tree: &BPlusTreeMap<i32, String>, tree_size: usize) {
     let start_key = (tree_size / 2) as i32;
 
     for &range_size in &range_sizes {
-        let end_key = start_key + range_size as i32;
+        let end_key = start_key + range_size;
 
         // Time the range operation
         let range_start = Instant::now();
