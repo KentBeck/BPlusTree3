@@ -1,4 +1,3 @@
-
 //! DELETE operations for BPlusTreeMap.
 //!
 //! This module contains all the deletion operations for the B+ tree, including
