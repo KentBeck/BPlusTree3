@@ -147,6 +147,7 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
     }
 
     /// Helper method to try getting the next item from the current leaf
+    #[inline]
     fn try_get_next_item(&mut self, leaf: &'a LeafNode<K, V>) -> Option<(&'a K, &'a V)> {
         // Check if we have more items in the current leaf
         if self.current_leaf_index >= leaf.keys_len() {
@@ -156,20 +157,18 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
         let key = leaf.get_key(self.current_leaf_index)?;
         let value = leaf.get_value(self.current_leaf_index)?;
 
-        // Check if we've reached the end bound using Option combinators
-        let beyond_end = self
-            .end_key
-            .map(|end| key >= end)
-            .or_else(|| {
-                self.end_bound_key.as_ref().map(|end| {
-                    if self.end_inclusive {
-                        key > end
-                    } else {
-                        key >= end
-                    }
-                })
-            })
-            .unwrap_or(false);
+        // Optimized: Direct conditional logic instead of Option combinators
+        let beyond_end = if let Some(end_key) = self.end_key {
+            key >= end_key
+        } else if let Some(ref end_bound) = self.end_bound_key {
+            if self.end_inclusive {
+                key > end_bound
+            } else {
+                key >= end_bound
+            }
+        } else {
+            false
+        };
 
         if beyond_end {
             self.finished = true;
@@ -182,6 +181,7 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
 
     /// Helper method to advance to the next leaf
     /// Returns Some(true) if successfully advanced, Some(false) if no more leaves, None if invalid leaf
+    #[inline]
     fn advance_to_next_leaf(&mut self) -> Option<bool> {
         // Use cached leaf reference to get next leaf ID
         let leaf = self.current_leaf_ref?;
@@ -206,22 +206,26 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
         }
 
         loop {
-            // Use cached leaf reference - NO arena lookup here!
-            let result = self
-                .current_leaf_ref
-                .and_then(|leaf| self.try_get_next_item(leaf));
-
-            match result {
-                Some(item) => return Some(item),
+            // Optimized: Direct access with early return instead of Option combinators
+            let leaf = match self.current_leaf_ref {
+                Some(leaf) => leaf,
                 None => {
-                    // Either no current leaf or no more items in current leaf
-                    if !self.advance_to_next_leaf().unwrap_or(false) {
-                        self.finished = true;
-                        return None;
-                    }
-                    // Continue loop with next leaf
+                    self.finished = true;
+                    return None;
                 }
+            };
+
+            // Try to get next item from current leaf
+            if let Some(item) = self.try_get_next_item(leaf) {
+                return Some(item);
             }
+
+            // No more items in current leaf, advance to next
+            if !self.advance_to_next_leaf().unwrap_or(false) {
+                self.finished = true;
+                return None;
+            }
+            // Continue loop with next leaf
         }
     }
 }
@@ -362,31 +366,37 @@ impl<'a, K: Ord + Clone, V: Clone> FastItemIterator<'a, K, V> {
 impl<'a, K: Ord + Clone, V: Clone> Iterator for FastItemIterator<'a, K, V> {
     type Item = (&'a K, &'a V);
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.finished {
             return None;
         }
 
         loop {
-            // Use cached leaf reference - NO arena lookup here!
-            let leaf = self.current_leaf_ref?;
+            // Optimized: Direct access with early return
+            let leaf = match self.current_leaf_ref {
+                Some(leaf) => leaf,
+                None => {
+                    self.finished = true;
+                    return None;
+                }
+            };
 
             if self.current_leaf_index < leaf.keys_len() {
                 let key = leaf.get_key(self.current_leaf_index)?;
                 let value = leaf.get_value(self.current_leaf_index)?;
                 self.current_leaf_index += 1;
                 return Some((key, value));
+            }
+
+            // Move to next leaf - this is the ONLY arena access during iteration
+            if leaf.next != NULL_NODE {
+                self.current_leaf_id = Some(leaf.next);
+                self.current_leaf_ref = unsafe { Some(self.tree.get_leaf_unchecked(leaf.next)) };
+                self.current_leaf_index = 0;
             } else {
-                // Move to next leaf - this is the ONLY arena access during iteration
-                if leaf.next != NULL_NODE {
-                    self.current_leaf_id = Some(leaf.next);
-                    self.current_leaf_ref =
-                        unsafe { Some(self.tree.get_leaf_unchecked(leaf.next)) };
-                    self.current_leaf_index = 0;
-                } else {
-                    self.finished = true;
-                    return None;
-                }
+                self.finished = true;
+                return None;
             }
         }
     }
