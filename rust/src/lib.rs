@@ -18,7 +18,6 @@ mod error;
 mod get_operations;
 mod insert_operations;
 mod iteration;
-mod iteration_optimization_plan;
 mod macros;
 mod node;
 mod range_queries;
