@@ -287,9 +287,9 @@ let result = self.try_get_next_item(leaf);
 ## Progress Tracking
 
 ### Phase 1 Progress
-- [ ] TODO 1.1: Simplify End Bound Checking
-- [ ] TODO 1.2: Inline Critical Path Methods  
-- [ ] TODO 1.3: Optimize Option Handling
+- [x] TODO 1.1: Simplify End Bound Checking
+- [x] TODO 1.2: Inline Critical Path Methods  
+- [x] TODO 1.3: Optimize Option Handling
 
 ### Phase 2 Progress  
 - [ ] TODO 2.1: Reduce Arena Access Frequency
