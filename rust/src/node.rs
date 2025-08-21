@@ -52,76 +52,91 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     }
 
     /// Get a key by index.
+    #[inline]
     pub fn get_key(&self, index: usize) -> Option<&K> {
         self.keys.get(index)
     }
 
     /// Get a value by index.
+    #[inline]
     pub fn get_value(&self, index: usize) -> Option<&V> {
         self.values.get(index)
     }
 
     /// Get a mutable reference to a value by index.
+    #[inline]
     pub fn get_value_mut(&mut self, index: usize) -> Option<&mut V> {
         self.values.get_mut(index)
     }
 
     /// Get the first key in the node.
+    #[inline]
     pub fn first_key(&self) -> Option<&K> {
         self.keys.first()
     }
 
     /// Get the last key in the node.
+    #[inline]
     pub fn last_key(&self) -> Option<&K> {
         self.keys.last()
     }
 
     /// Check if the keys vector is empty.
+    #[inline]
     pub fn keys_is_empty(&self) -> bool {
         self.keys.is_empty()
     }
 
     /// Get the number of keys.
+    #[inline]
     pub fn keys_len(&self) -> usize {
         self.keys.len()
     }
 
     /// Get the number of values.
+    #[inline]
     pub fn values_len(&self) -> usize {
         self.values.len()
     }
 
     /// Push a key to the keys vector.
+    #[inline]
     pub fn push_key(&mut self, key: K) {
         self.keys.push(key);
     }
 
     /// Push a value to the values vector.
+    #[inline]
     pub fn push_value(&mut self, value: V) {
         self.values.push(value);
     }
 
     /// Append keys from another vector.
+    #[inline]
     pub fn append_keys(&mut self, other: &mut Vec<K>) {
         self.keys.append(other);
     }
 
     /// Append values from another vector.
+    #[inline]
     pub fn append_values(&mut self, other: &mut Vec<V>) {
         self.values.append(other);
     }
 
     /// Take all keys, leaving an empty vector.
+    #[inline]
     pub fn take_keys(&mut self) -> Vec<K> {
         std::mem::take(&mut self.keys)
     }
 
     /// Take all values, leaving an empty vector.
+    #[inline]
     pub fn take_values(&mut self) -> Vec<V> {
         std::mem::take(&mut self.values)
     }
 
     /// Perform binary search on keys.
+    #[inline]
     pub fn binary_search_keys(&self, key: &K) -> Result<usize, usize>
     where
         K: Ord,
