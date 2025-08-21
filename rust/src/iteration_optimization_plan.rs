@@ -278,3 +278,6 @@
 ///
 /// This plan provides a systematic approach to closing the iteration performance gap
 /// while managing implementation risk and maintaining code quality.
+
+// This module contains only documentation and planning information
+// No actual code implementation is included here
