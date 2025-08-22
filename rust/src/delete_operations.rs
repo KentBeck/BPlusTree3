@@ -174,46 +174,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
-    /// Helper to check if a node can donate
-    #[inline]
-    fn can_node_donate(&self, node_ref: &NodeRef<K, V>) -> bool {
-        match node_ref {
-            NodeRef::Leaf(id, _) => self
-                .get_leaf(*id)
-                .map(|leaf| leaf.can_donate())
-                .unwrap_or(false),
-            NodeRef::Branch(id, _) => self
-                .get_branch(*id)
-                .map(|branch| branch.can_donate())
-                .unwrap_or(false),
-        }
-    }
-
-    /// Get sibling node reference if it exists and types match
-    fn get_branch_sibling(
-        &self,
-        branch_id: NodeId,
-        child_index: usize,
-        get_left: bool,
-    ) -> Option<NodeRef<K, V>> {
-        let branch = self.get_branch(branch_id)?;
-        let sibling_index = if get_left {
-            child_index.checked_sub(1)?
-        } else {
-            child_index + 1
-        };
-
-        match (
-            branch.children.get(child_index),
-            branch.children.get(sibling_index),
-        ) {
-            (Some(NodeRef::Branch(_, _)), Some(NodeRef::Branch(_, _))) => {
-                branch.children.get(sibling_index).cloned()
-            }
-            _ => None,
-        }
-    }
-
+    
     /// Rebalance an underfull child in an arena branch
     #[inline]
     /// Rebalance an underfull child node using optimized sibling information gathering.
@@ -415,18 +376,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
-    /// Legacy method for compatibility - delegates to optimized version
-    fn rebalance_leaf_child(
-        &mut self,
-        branch_id: NodeId,
-        child_index: usize,
-        _has_left_sibling: bool,
-        _has_right_sibling: bool,
-    ) -> bool {
-        // Delegate to the optimized version
-        self.rebalance_child(branch_id, child_index)
-    }
-
+    
     /// Rebalance an underfull branch child using pre-gathered sibling information.
     /// This optimized version eliminates redundant arena access and improves readability.
     fn rebalance_branch_optimized(
@@ -462,18 +412,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
-    /// Legacy method for compatibility - rebalance an underfull branch child
-    fn rebalance_branch_child(
-        &mut self,
-        branch_id: NodeId,
-        child_index: usize,
-        _has_left_sibling: bool,
-        _has_right_sibling: bool,
-    ) -> bool {
-        // Delegate to the optimized version
-        self.rebalance_child(branch_id, child_index)
-    }
-
+    
     /// Merge branch with left sibling
     fn merge_with_left_branch(&mut self, parent_id: NodeId, child_index: usize) -> bool {
         // Get the branch IDs and collect all needed info from parent in one access
