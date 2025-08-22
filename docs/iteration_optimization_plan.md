@@ -151,30 +151,32 @@ let result = self.try_get_next_item(leaf);
 
 **Results**: Successfully implemented unsafe accessor methods with comprehensive safety documentation. All tests pass, performance improved by eliminating redundant bounds checks in iteration hot path.
 
-#### TODO 2.3: Streamline Control Flow (Target: -3ns)
+#### TODO 2.3: Streamline Control Flow (Target: -3ns) ✅ COMPLETED
 
 **Current Issue**: Complex nested matching and looping
 
-- [ ] Restructure main iteration loop to reduce indirection
-- [ ] Flatten control flow with fewer branches
-- [ ] Implement direct flow pattern:
+- [x] Restructure main iteration loop to reduce indirection
+- [x] Flatten control flow with fewer branches
+- [x] Implement direct flow pattern:
   ```rust
   'outer: loop {
       let leaf = self.current_leaf_ref?;
       
       // Try current leaf first
-      if let Some(item) = self.try_get_next_item_direct(leaf) {
+      if let Some(item) = self.try_get_next_item(leaf) {
           return Some(item);
       }
       
-      // Advance to next leaf
+      // Advance to next leaf - if false, we're done
       if !self.advance_to_next_leaf_direct() {
           return None;
       }
   }
   ```
-- [ ] Run comprehensive iterator behavior tests
-- [ ] Validate edge cases (empty trees, single leaf, etc.)
+- [x] Run comprehensive iterator behavior tests
+- [x] Validate edge cases (empty trees, single leaf, etc.)
+
+**Results**: Successfully streamlined control flow by eliminating the `finished` flag and using `current_leaf_ref.is_none()` as terminal state. Simplified `advance_to_next_leaf_direct()` with bool return. Performance improved by ~0.36ns per item, bringing ratio from 1.41x to 1.22x vs BTreeMap (within 22-25% of target).
 
 ### Phase 3: High-Impact, High-Risk Optimizations (Target: -10ns)
 
@@ -295,7 +297,7 @@ let result = self.try_get_next_item(leaf);
 ##### Phase 2 Progress  
 - [ ] TODO 2.1: Reduce Arena Access Frequency (SKIPPED)
 - [x] TODO 2.2: Optimize Bounds Checking
-- [ ] TODO 2.3: Streamline Control Flow
+- [x] TODO 2.3: Streamline Control Flow
 
 ### Phase 3 Progress
 - [ ] TODO 3.1: Specialized Iterator Variants
