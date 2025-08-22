@@ -189,10 +189,21 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             
             let child_is_leaf = matches!(parent_branch.children[child_index], NodeRef::Leaf(_, _));
             
-            // OPTIMIZATION: Batch sibling information gathering to minimize arena access
+            // OPTIMIZATION: Batch sibling information gathering with direct node access
             let left_sibling_info = if child_index > 0 {
                 let sibling_ref = parent_branch.children[child_index - 1].clone();
-                let can_donate = self.check_node_can_donate(&sibling_ref);
+                let can_donate = match &sibling_ref {
+                    NodeRef::Leaf(id, _) => {
+                        self.get_leaf(*id)
+                            .map(|leaf| leaf.keys.len() > leaf.min_keys())
+                            .unwrap_or(false)
+                    }
+                    NodeRef::Branch(id, _) => {
+                        self.get_branch(*id)
+                            .map(|branch| branch.keys.len() > branch.min_keys())
+                            .unwrap_or(false)
+                    }
+                };
                 Some((sibling_ref, can_donate))
             } else {
                 None
@@ -200,7 +211,18 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             
             let right_sibling_info = if child_index < parent_branch.children.len() - 1 {
                 let sibling_ref = parent_branch.children[child_index + 1].clone();
-                let can_donate = self.check_node_can_donate(&sibling_ref);
+                let can_donate = match &sibling_ref {
+                    NodeRef::Leaf(id, _) => {
+                        self.get_leaf(*id)
+                            .map(|leaf| leaf.keys.len() > leaf.min_keys())
+                            .unwrap_or(false)
+                    }
+                    NodeRef::Branch(id, _) => {
+                        self.get_branch(*id)
+                            .map(|branch| branch.keys.len() > branch.min_keys())
+                            .unwrap_or(false)
+                    }
+                };
                 Some((sibling_ref, can_donate))
             } else {
                 None
@@ -219,24 +241,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
-    /// Check if a node can donate a key/value pair to a sibling
-    #[inline]
-    fn check_node_can_donate(&self, node_ref: &NodeRef<K, V>) -> bool {
-        match node_ref {
-            NodeRef::Leaf(id, _) => {
-                // Single arena access to check if leaf can donate
-                self.get_leaf(*id)
-                    .map(|leaf| leaf.keys.len() > leaf.min_keys())
-                    .unwrap_or(false)
-            }
-            NodeRef::Branch(id, _) => {
-                // Single arena access to check if branch can donate
-                self.get_branch(*id)
-                    .map(|branch| branch.keys.len() > branch.min_keys())
-                    .unwrap_or(false)
-            }
-        }
-    }
 }
 
 #[cfg(test)]
