@@ -192,7 +192,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             // OPTIMIZATION: Batch sibling information gathering to minimize arena access
             let left_sibling_info = if child_index > 0 {
                 let sibling_ref = parent_branch.children[child_index - 1].clone();
-                let can_donate = self.check_node_can_donate_optimized(&sibling_ref);
+                let can_donate = self.check_node_can_donate(&sibling_ref);
                 Some((sibling_ref, can_donate))
             } else {
                 None
@@ -200,12 +200,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             
             let right_sibling_info = if child_index < parent_branch.children.len() - 1 {
                 let sibling_ref = parent_branch.children[child_index + 1].clone();
-                let can_donate = self.check_node_can_donate_optimized(&sibling_ref);
+                let can_donate = self.check_node_can_donate(&sibling_ref);
                 Some((sibling_ref, can_donate))
             } else {
                 None
             };
-            
+
             (child_is_leaf, left_sibling_info, right_sibling_info)
         };
         
@@ -213,15 +213,15 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         
         // Dispatch to appropriate rebalancing strategy
         if child_is_leaf {
-            self.rebalance_leaf_optimized(parent_id, child_index, left_sibling_info, right_sibling_info)
+            self.rebalance_leaf(parent_id, child_index, left_sibling_info, right_sibling_info)
         } else {
-            self.rebalance_branch_optimized(parent_id, child_index, left_sibling_info, right_sibling_info)
+            self.rebalance_branch(parent_id, child_index, left_sibling_info, right_sibling_info)
         }
     }
 
-    /// Optimized version of can_node_donate that's more explicit about arena access
+    /// Check if a node can donate a key/value pair to a sibling
     #[inline]
-    fn check_node_can_donate_optimized(&self, node_ref: &NodeRef<K, V>) -> bool {
+    fn check_node_can_donate(&self, node_ref: &NodeRef<K, V>) -> bool {
         match node_ref {
             NodeRef::Leaf(id, _) => {
                 // Single arena access to check if leaf can donate
@@ -342,8 +342,8 @@ mod tests {
 
 impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Rebalance an underfull leaf child using pre-gathered sibling information.
-    /// This optimized version eliminates redundant arena access and improves readability.
-    fn rebalance_leaf_optimized(
+    /// This version eliminates redundant arena access and improves readability.
+    fn rebalance_leaf(
         &mut self,
         parent_id: NodeId,
         child_index: usize,
@@ -378,8 +378,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     
     /// Rebalance an underfull branch child using pre-gathered sibling information.
-    /// This optimized version eliminates redundant arena access and improves readability.
-    fn rebalance_branch_optimized(
+    /// This version eliminates redundant arena access and improves readability.
+    fn rebalance_branch(
         &mut self,
         parent_id: NodeId,
         child_index: usize,
