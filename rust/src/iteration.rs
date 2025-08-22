@@ -188,7 +188,9 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
         };
 
         if beyond_end {
-            self.finished = true;
+            // Set terminal state instead of finished flag
+            self.current_leaf_ref = None;
+            self.current_leaf_id = None;
             return None;
         }
 
@@ -196,21 +198,37 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
         Some((key, value))
     }
 
-    /// Helper method to advance to the next leaf
-    /// Returns Some(true) if successfully advanced, Some(false) if no more leaves, None if invalid leaf
+    /// STREAMLINED: Direct leaf advancement with simplified return type
+    /// Returns true if successfully advanced to next leaf, false if no more leaves
     #[inline]
-    fn advance_to_next_leaf(&mut self) -> Option<bool> {
+    fn advance_to_next_leaf_direct(&mut self) -> bool {
         // Use cached leaf reference to get next leaf ID
-        let leaf = self.current_leaf_ref?;
+        let leaf = match self.current_leaf_ref {
+            Some(leaf) => leaf,
+            None => return false, // Already at terminal state
+        };
 
-        let next_leaf_id = (leaf.next != NULL_NODE).then_some(leaf.next);
+        // Check if there's a next leaf
+        if leaf.next == NULL_NODE {
+            // No more leaves - set terminal state
+            self.current_leaf_ref = None;
+            self.current_leaf_id = None;
+            return false;
+        }
 
-        // Update both ID and cached reference - this is the ONLY arena access during iteration
-        self.current_leaf_id = next_leaf_id;
-        self.current_leaf_ref = next_leaf_id.and_then(|id| self.tree.get_leaf(id));
+        // Advance to next leaf - this is the ONLY arena access during iteration
+        self.current_leaf_id = Some(leaf.next);
+        self.current_leaf_ref = self.tree.get_leaf(leaf.next);
         self.current_leaf_index = 0;
 
-        Some(self.current_leaf_id.is_some())
+        // Return whether we successfully got the next leaf
+        self.current_leaf_ref.is_some()
+    }
+
+    /// Legacy method for compatibility - delegates to streamlined version
+    #[inline]
+    fn advance_to_next_leaf(&mut self) -> Option<bool> {
+        Some(self.advance_to_next_leaf_direct())
     }
 }
 
@@ -218,31 +236,28 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.finished {
-            return None;
-        }
-
-        loop {
-            // Optimized: Direct access with early return instead of Option combinators
-            let leaf = match self.current_leaf_ref {
-                Some(leaf) => leaf,
-                None => {
-                    self.finished = true;
-                    return None;
-                }
-            };
-
-            // Try to get next item from current leaf
+        // STREAMLINED CONTROL FLOW: Eliminate finished flag, reduce branching
+        //
+        // Key optimizations:
+        // 1. Use current_leaf_ref.is_none() as terminal state (no finished flag)
+        // 2. Direct flow with fewer nested conditions
+        // 3. Simplified advance_to_next_leaf_direct() with bool return
+        // 4. Single exit point pattern
+        
+        'outer: loop {
+            // Direct access - if no leaf, we're done (terminal state)
+            let leaf = self.current_leaf_ref?;
+            
+            // Try current leaf first
             if let Some(item) = self.try_get_next_item(leaf) {
                 return Some(item);
             }
-
-            // No more items in current leaf, advance to next
-            if !self.advance_to_next_leaf().unwrap_or(false) {
-                self.finished = true;
+            
+            // Advance to next leaf - if false, we're done
+            if !self.advance_to_next_leaf_direct() {
                 return None;
             }
-            // Continue loop with next leaf
+            // Continue with next leaf
         }
     }
 }
