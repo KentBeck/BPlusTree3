@@ -12,13 +12,16 @@ from typing import Any, Dict
 try:
     # Try to import from installed package first
     import bplustree
+
     BPlusTreeMap = bplustree.BPlusTreeMap
 except ImportError:
     # Fall back to local import if package not installed
     import sys
     import os
+
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     import bplustree
+
     BPlusTreeMap = bplustree.BPlusTreeMap
 
 

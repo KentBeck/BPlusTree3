@@ -261,10 +261,14 @@ def test_no_segfaults():
         print("🎉 NO SEGFAULTS! C extension is memory-safe.")
     else:
         print("🚨 CRITICAL: Fix all issues before proceeding!")
-        assert False, f"CRITICAL: {failed} segfault tests failed - must fix immediately!"
-    
+        assert (
+            False
+        ), f"CRITICAL: {failed} segfault tests failed - must fix immediately!"
+
     # Explicitly assert success
-    assert failed == 0, f"CRITICAL: {failed} segfault tests failed - must fix immediately!"
+    assert (
+        failed == 0
+    ), f"CRITICAL: {failed} segfault tests failed - must fix immediately!"
 
 
 if __name__ == "__main__":

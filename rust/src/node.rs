@@ -121,21 +121,21 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     // - Always perform explicit bounds check before calling unsafe methods
     // - Use get_key_value_unchecked() when accessing both key and value
     // - Document safety reasoning at each call site
-    
+
     /// Get a key by index without bounds checking.
-    /// 
+    ///
     /// # Safety
-    /// 
+    ///
     /// The caller must ensure that `index < self.keys_len()`.
     /// Violating this invariant will result in undefined behavior.
-    /// 
+    ///
     /// # Performance
-    /// 
+    ///
     /// This method eliminates the bounds check performed by `Vec::get()`,
     /// providing direct access to the underlying array element.
-    /// 
+    ///
     /// # Usage
-    /// 
+    ///
     /// ```rust,ignore
     /// if index < leaf.keys_len() {
     ///     let key = unsafe { leaf.get_key_unchecked(index) };
@@ -146,21 +146,21 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     pub unsafe fn get_key_unchecked(&self, index: usize) -> &K {
         self.keys.get_unchecked(index)
     }
-    
+
     /// Get a value by index without bounds checking.
-    /// 
+    ///
     /// # Safety
-    /// 
+    ///
     /// The caller must ensure that `index < self.values_len()`.
     /// Violating this invariant will result in undefined behavior.
-    /// 
+    ///
     /// # Performance
-    /// 
+    ///
     /// This method eliminates the bounds check performed by `Vec::get()`,
     /// providing direct access to the underlying array element.
-    /// 
+    ///
     /// # Usage
-    /// 
+    ///
     /// ```rust,ignore
     /// if index < leaf.values_len() {
     ///     let value = unsafe { leaf.get_value_unchecked(index) };
@@ -171,23 +171,23 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     pub unsafe fn get_value_unchecked(&self, index: usize) -> &V {
         self.values.get_unchecked(index)
     }
-    
+
     /// Get both key and value by index without bounds checking.
-    /// 
+    ///
     /// # Safety
-    /// 
+    ///
     /// The caller must ensure that `index < self.keys_len()` and `index < self.values_len()`.
     /// In a well-formed leaf node, keys.len() == values.len(), so checking either is sufficient.
     /// Violating this invariant will result in undefined behavior.
-    /// 
+    ///
     /// # Performance
-    /// 
+    ///
     /// This method eliminates two bounds checks (one for key, one for value) and
     /// provides the most efficient way to access both key and value simultaneously.
     /// Preferred over separate get_key_unchecked() + get_value_unchecked() calls.
-    /// 
+    ///
     /// # Usage
-    /// 
+    ///
     /// ```rust,ignore
     /// if index < leaf.keys_len() {
     ///     let (key, value) = unsafe { leaf.get_key_value_unchecked(index) };
@@ -196,7 +196,10 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     /// ```
     #[inline]
     pub unsafe fn get_key_value_unchecked(&self, index: usize) -> (&K, &V) {
-        (self.keys.get_unchecked(index), self.values.get_unchecked(index))
+        (
+            self.keys.get_unchecked(index),
+            self.values.get_unchecked(index),
+        )
     }
 
     /// Push a key to the keys vector.
