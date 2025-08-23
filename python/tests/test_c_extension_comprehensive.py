@@ -12,6 +12,7 @@ import pytest
 
 try:
     import bplustree_c
+
     HAS_C_EXTENSION = True
 except ImportError as e:
     pytest.skip(f"C extension not available: {e}", allow_module_level=True)

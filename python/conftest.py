@@ -1,6 +1,7 @@
 """
 Pytest configuration for building the C extension before tests.
 """
+
 import sys
 import subprocess
 from pathlib import Path

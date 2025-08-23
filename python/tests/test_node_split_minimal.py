@@ -12,6 +12,7 @@ import pytest
 
 try:
     import bplustree_c
+
     HAS_C_EXTENSION = True
 except ImportError as e:
     pytest.skip(f"C extension not available: {e}", allow_module_level=True)
@@ -39,7 +40,13 @@ def test_single_node_split_maintains_order():
     print(f"Expected: [0, 1, 2, 3, 4]")
 
     # THE CRITICAL TEST: keys must be sorted
-    assert keys == [0, 1, 2, 3, 4], f"Keys not in sorted order after single node split. Got: {keys}"
+    assert keys == [
+        0,
+        1,
+        2,
+        3,
+        4,
+    ], f"Keys not in sorted order after single node split. Got: {keys}"
     print("✅ PASSED: Keys in correct order after split")
 
 

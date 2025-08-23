@@ -15,7 +15,9 @@ def test_pydocstyle_conformance():
         stderr=subprocess.STDOUT,
         text=True,
     )
-    
+
     # For now, just warn about violations instead of failing
     if result.returncode != 0:
-        pytest.skip(f"Docstyle violations found (non-failing for now):\n{result.stdout}")
+        pytest.skip(
+            f"Docstyle violations found (non-failing for now):\n{result.stdout}"
+        )

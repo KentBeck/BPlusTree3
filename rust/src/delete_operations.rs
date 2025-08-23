@@ -174,7 +174,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
-    
     /// Rebalance an underfull child in an arena branch
     #[inline]
     /// Rebalance an underfull child node using optimized sibling information gathering.
@@ -186,42 +185,38 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 Some(branch) => branch,
                 None => return false,
             };
-            
+
             let child_is_leaf = matches!(parent_branch.children[child_index], NodeRef::Leaf(_, _));
-            
+
             // OPTIMIZATION: Batch sibling information gathering with direct node access
             let left_sibling_info = if child_index > 0 {
                 let sibling_ref = parent_branch.children[child_index - 1].clone();
                 let can_donate = match &sibling_ref {
-                    NodeRef::Leaf(id, _) => {
-                        self.get_leaf(*id)
-                            .map(|leaf| leaf.keys.len() > leaf.min_keys())
-                            .unwrap_or(false)
-                    }
-                    NodeRef::Branch(id, _) => {
-                        self.get_branch(*id)
-                            .map(|branch| branch.keys.len() > branch.min_keys())
-                            .unwrap_or(false)
-                    }
+                    NodeRef::Leaf(id, _) => self
+                        .get_leaf(*id)
+                        .map(|leaf| leaf.keys.len() > leaf.min_keys())
+                        .unwrap_or(false),
+                    NodeRef::Branch(id, _) => self
+                        .get_branch(*id)
+                        .map(|branch| branch.keys.len() > branch.min_keys())
+                        .unwrap_or(false),
                 };
                 Some((sibling_ref, can_donate))
             } else {
                 None
             };
-            
+
             let right_sibling_info = if child_index < parent_branch.children.len() - 1 {
                 let sibling_ref = parent_branch.children[child_index + 1].clone();
                 let can_donate = match &sibling_ref {
-                    NodeRef::Leaf(id, _) => {
-                        self.get_leaf(*id)
-                            .map(|leaf| leaf.keys.len() > leaf.min_keys())
-                            .unwrap_or(false)
-                    }
-                    NodeRef::Branch(id, _) => {
-                        self.get_branch(*id)
-                            .map(|branch| branch.keys.len() > branch.min_keys())
-                            .unwrap_or(false)
-                    }
+                    NodeRef::Leaf(id, _) => self
+                        .get_leaf(*id)
+                        .map(|leaf| leaf.keys.len() > leaf.min_keys())
+                        .unwrap_or(false),
+                    NodeRef::Branch(id, _) => self
+                        .get_branch(*id)
+                        .map(|branch| branch.keys.len() > branch.min_keys())
+                        .unwrap_or(false),
                 };
                 Some((sibling_ref, can_donate))
             } else {
@@ -230,17 +225,26 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
             (child_is_leaf, left_sibling_info, right_sibling_info)
         };
-        
+
         let (child_is_leaf, left_sibling_info, right_sibling_info) = rebalance_info;
-        
+
         // Dispatch to appropriate rebalancing strategy
         if child_is_leaf {
-            self.rebalance_leaf(parent_id, child_index, left_sibling_info, right_sibling_info)
+            self.rebalance_leaf(
+                parent_id,
+                child_index,
+                left_sibling_info,
+                right_sibling_info,
+            )
         } else {
-            self.rebalance_branch(parent_id, child_index, left_sibling_info, right_sibling_info)
+            self.rebalance_branch(
+                parent_id,
+                child_index,
+                left_sibling_info,
+                right_sibling_info,
+            )
         }
     }
-
 }
 
 #[cfg(test)]
@@ -257,24 +261,24 @@ mod tests {
     fn test_optimized_rebalancing_reduces_arena_access() {
         // Test that the optimized rebalancing works correctly
         let mut tree = BPlusTreeMap::new(4).unwrap();
-        
+
         // Insert enough items to create multiple levels
         for i in 0..20 {
             tree.insert(i, format!("value_{}", i));
         }
-        
+
         // Verify tree structure before deletion
         assert!(tree.len() == 20);
-        
+
         // Delete items that will trigger rebalancing
         for i in (0..10).step_by(2) {
             let removed = tree.remove(&i);
             assert!(removed.is_some(), "Should have removed key {}", i);
         }
-        
+
         // Verify tree is still valid after rebalancing
         assert!(tree.len() == 15);
-        
+
         // Verify remaining items are still accessible
         for i in (1..20).step_by(2) {
             if i < 10 {
@@ -295,22 +299,27 @@ mod tests {
         for i in 0..15 {
             tree.insert(i, i * 2);
         }
-        
+
         let initial_len = tree.len();
-        
+
         // Delete items in a pattern that tests different rebalancing scenarios
         let delete_keys = vec![1, 3, 5, 7, 9, 11, 13];
         for key in delete_keys {
             let removed = tree.remove(&key);
             assert!(removed.is_some(), "Should have removed key {}", key);
         }
-        
+
         assert_eq!(tree.len(), initial_len - 7);
-        
+
         // Verify tree integrity by checking all remaining items
         let remaining_keys = vec![0, 2, 4, 6, 8, 10, 12, 14];
         for key in remaining_keys {
-            assert_eq!(tree.get(&key), Some(&(key * 2)), "Key {} should have correct value", key);
+            assert_eq!(
+                tree.get(&key),
+                Some(&(key * 2)),
+                "Key {} should have correct value",
+                key
+            );
         }
     }
 
@@ -318,13 +327,13 @@ mod tests {
     fn test_delete_performance_characteristics() {
         // Test that demonstrates the performance characteristics of the optimized delete
         let mut tree = BPlusTreeMap::new(16).unwrap();
-        
+
         // Insert a larger dataset
         let n = 1000;
         for i in 0..n {
             tree.insert(i, format!("value_{}", i));
         }
-        
+
         // Delete every 3rd item (creates various rebalancing scenarios)
         let mut deleted_count = 0;
         for i in (0..n).step_by(3) {
@@ -332,14 +341,19 @@ mod tests {
                 deleted_count += 1;
             }
         }
-        
+
         assert_eq!(tree.len(), n - deleted_count);
-        
+
         // Verify tree is still valid and searchable
         for i in 0..n {
             let should_exist = i % 3 != 0;
-            assert_eq!(tree.get(&i).is_some(), should_exist, 
-                      "Key {} existence should be {}", i, should_exist);
+            assert_eq!(
+                tree.get(&i).is_some(),
+                should_exist,
+                "Key {} existence should be {}",
+                i,
+                should_exist
+            );
         }
     }
 }
@@ -361,7 +375,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 return self.borrow_from_left_leaf(parent_id, child_index);
             }
         }
-        
+
         if let Some((_right_ref, can_donate)) = right_sibling_info {
             if can_donate {
                 return self.borrow_from_right_leaf(parent_id, child_index);
@@ -380,7 +394,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
-    
     /// Rebalance an underfull branch child using pre-gathered sibling information.
     /// This version eliminates redundant arena access and improves readability.
     fn rebalance_branch(
@@ -397,7 +410,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 return self.borrow_from_left_branch(parent_id, child_index);
             }
         }
-        
+
         if let Some((_right_ref, can_donate)) = right_sibling_info {
             if can_donate {
                 return self.borrow_from_right_branch(parent_id, child_index);
@@ -416,7 +429,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
-    
     /// Merge branch with left sibling
     fn merge_with_left_branch(&mut self, parent_id: NodeId, child_index: usize) -> bool {
         // Get the branch IDs and collect all needed info from parent in one access

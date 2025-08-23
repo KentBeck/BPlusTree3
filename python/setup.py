@@ -100,10 +100,10 @@ setup(
     author="Kent Beck",
     author_email="kent@kentbeck.com",
     url="https://github.com/KentBeck/BPlusTree3",
-project_urls={
-"Homepage": "https://github.com/KentBeck/BPlusTree3",
-"Documentation": "https://github.com/KentBeck/BPlusTree3/tree/main/python",
-"Repository": "https://github.com/KentBeck/BPlusTree3",
+    project_urls={
+        "Homepage": "https://github.com/KentBeck/BPlusTree3",
+        "Documentation": "https://github.com/KentBeck/BPlusTree3/tree/main/python",
+        "Repository": "https://github.com/KentBeck/BPlusTree3",
         "Issues": "https://github.com/KentBeck/BPlusTree3/issues",
         "Changelog": "https://github.com/KentBeck/BPlusTree3/blob/main/python/CHANGELOG.md",
     },

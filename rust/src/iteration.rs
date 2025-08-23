@@ -19,7 +19,6 @@ pub struct ItemIterator<'a, K, V> {
     end_key: Option<&'a K>,
     end_bound_key: Option<K>,
     end_inclusive: bool,
-    finished: bool,
 }
 
 /// Fast iterator over key-value pairs using unsafe arena access for better performance.
@@ -28,7 +27,6 @@ pub struct FastItemIterator<'a, K, V> {
     current_leaf_id: Option<NodeId>,
     pub current_leaf_ref: Option<&'a LeafNode<K, V>>, // CACHED leaf reference
     current_leaf_index: usize,
-    finished: bool,
 }
 
 /// Iterator over keys in the B+ tree.
@@ -116,7 +114,6 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
             end_key: None,
             end_bound_key: None,
             end_inclusive: false,
-            finished: false,
         }
     }
 
@@ -142,7 +139,6 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
             end_key,
             end_bound_key,
             end_inclusive,
-            finished: false,
         }
     }
 
@@ -170,9 +166,7 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
         // - Eliminates 2 bounds checks per iteration (key + value access)
         // - Reduces per-item overhead by ~4-6ns
         // - Critical for competitive iteration performance vs BTreeMap
-        let (key, value) = unsafe {
-            leaf.get_key_value_unchecked(self.current_leaf_index)
-        };
+        let (key, value) = unsafe { leaf.get_key_value_unchecked(self.current_leaf_index) };
 
         // Optimized: Direct conditional logic instead of Option combinators
         let beyond_end = if let Some(end_key) = self.end_key {
@@ -224,12 +218,6 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
         // Return whether we successfully got the next leaf
         self.current_leaf_ref.is_some()
     }
-
-    /// Legacy method for compatibility - delegates to streamlined version
-    #[inline]
-    fn advance_to_next_leaf(&mut self) -> Option<bool> {
-        Some(self.advance_to_next_leaf_direct())
-    }
 }
 
 impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
@@ -243,16 +231,16 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
         // 2. Direct flow with fewer nested conditions
         // 3. Simplified advance_to_next_leaf_direct() with bool return
         // 4. Single exit point pattern
-        
-        'outer: loop {
+
+        loop {
             // Direct access - if no leaf, we're done (terminal state)
             let leaf = self.current_leaf_ref?;
-            
+
             // Try current leaf first
             if let Some(item) = self.try_get_next_item(leaf) {
                 return Some(item);
             }
-            
+
             // Advance to next leaf - if false, we're done
             if !self.advance_to_next_leaf_direct() {
                 return None;
@@ -390,7 +378,6 @@ impl<'a, K: Ord + Clone, V: Clone> FastItemIterator<'a, K, V> {
             current_leaf_id: leftmost_id,
             current_leaf_ref,
             current_leaf_index: 0,
-            finished: false,
         }
     }
 }
@@ -400,19 +387,9 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for FastItemIterator<'a, K, V> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.finished {
-            return None;
-        }
-
         loop {
             // Optimized: Direct access with early return
-            let leaf = match self.current_leaf_ref {
-                Some(leaf) => leaf,
-                None => {
-                    self.finished = true;
-                    return None;
-                }
-            };
+            let leaf = self.current_leaf_ref?;
 
             if self.current_leaf_index < leaf.keys_len() {
                 let key = leaf.get_key(self.current_leaf_index)?;
@@ -427,7 +404,6 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for FastItemIterator<'a, K, V> {
                 self.current_leaf_ref = unsafe { Some(self.tree.get_leaf_unchecked(leaf.next)) };
                 self.current_leaf_index = 0;
             } else {
-                self.finished = true;
                 return None;
             }
         }

@@ -53,9 +53,9 @@ class IntArrayLeafNode:
             # Shift keys
             self.data[pos + 1 : self.num_keys + 1] = self.data[pos : self.num_keys]
             # Shift values
-            self.data[
-                self.capacity + pos + 1 : self.capacity + self.num_keys + 1
-            ] = self.data[self.capacity + pos : self.capacity + self.num_keys]
+            self.data[self.capacity + pos + 1 : self.capacity + self.num_keys + 1] = (
+                self.data[self.capacity + pos : self.capacity + self.num_keys]
+            )
 
         # Insert
         self.data[pos] = key

@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     import bplustree_c
+
     HAS_C_EXTENSION = True
 except ImportError:
     HAS_C_EXTENSION = False
@@ -308,7 +309,9 @@ class TestIteratorModificationSafety:
                 next(keys_iter)
                 tree[i + 10000] = "trigger_invalidation"
 
-                with pytest.raises(RuntimeError, match="tree changed size during iteration"):
+                with pytest.raises(
+                    RuntimeError, match="tree changed size during iteration"
+                ):
                     next(keys_iter)
 
         # Final iteration should work
@@ -335,4 +338,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
