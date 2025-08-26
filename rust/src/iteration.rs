@@ -170,9 +170,7 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
         // - Eliminates 2 bounds checks per iteration (key + value access)
         // - Reduces per-item overhead by ~4-6ns
         // - Critical for competitive iteration performance vs BTreeMap
-        let (key, value) = unsafe {
-            leaf.get_key_value_unchecked(self.current_leaf_index)
-        };
+        let (key, value) = unsafe { leaf.get_key_value_unchecked(self.current_leaf_index) };
 
         // Optimized: Direct conditional logic instead of Option combinators
         let beyond_end = if let Some(end_key) = self.end_key {
@@ -243,16 +241,16 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
         // 2. Direct flow with fewer nested conditions
         // 3. Simplified advance_to_next_leaf_direct() with bool return
         // 4. Single exit point pattern
-        
+
         'outer: loop {
             // Direct access - if no leaf, we're done (terminal state)
             let leaf = self.current_leaf_ref?;
-            
+
             // Try current leaf first
             if let Some(item) = self.try_get_next_item(leaf) {
                 return Some(item);
             }
-            
+
             // Advance to next leaf - if false, we're done
             if !self.advance_to_next_leaf_direct() {
                 return None;
