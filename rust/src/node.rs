@@ -375,6 +375,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         let right_values = self.values.split_off(mid);
 
         // Create the new right node
+        // This really should be allocated directly via the arena, but this seems like a big change.
         let new_right = LeafNode {
             capacity: self.capacity,
             keys: right_keys,
