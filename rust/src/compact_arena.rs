@@ -396,6 +396,25 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.leaf_arena.allocate(leaf)
     }
 
+    /// Allocate a new leaf node directly in the arena from components.
+    /// This avoids heap allocation by constructing the LeafNode directly in arena storage.
+    #[inline]
+    pub fn allocate_leaf_with_data(
+        &mut self,
+        capacity: usize,
+        keys: Vec<K>,
+        values: Vec<V>,
+        next: NodeId,
+    ) -> NodeId {
+        let leaf = LeafNode {
+            capacity,
+            keys,
+            values,
+            next,
+        };
+        self.leaf_arena.allocate(leaf)
+    }
+
     /// Allocate a new branch node in the arena and return its ID.
     #[inline]
     pub fn allocate_branch(&mut self, branch: BranchNode<K, V>) -> NodeId {

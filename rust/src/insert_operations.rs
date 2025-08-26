@@ -57,21 +57,66 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
                 // Node is full, need to split
                 // Don't insert first. That causes the Vecs to overflow.
-                // Split the full node
-                let mut new_right = leaf.split();
-                // Insert into the correct node
-                if index <= leaf.keys.len() {
-                    leaf.insert_at_index(index, key, value);
-                } else {
-                    new_right.insert_at_index(index - leaf.keys.len(), key, value);
+                // Split the full node - inline the split logic
+
+                // Calculate split point for better balance while ensuring both sides have at least min_keys
+                let min_keys = leaf.capacity / 2; // min_keys() inlined
+                let total_keys = leaf.keys.len();
+
+                // Use a more balanced split: aim for roughly equal distribution
+                let mid = total_keys.div_ceil(2); // Round up for odd numbers
+
+                // Ensure the split point respects minimum requirements
+                let mid = mid.max(min_keys).min(total_keys - min_keys);
+
+                // Split the keys and values
+                let right_keys = leaf.keys.split_off(mid);
+                let right_values = leaf.values.split_off(mid);
+
+                // Store values we need before releasing the leaf borrow
+                let leaf_capacity = leaf.capacity;
+                let leaf_next = leaf.next;
+                let leaf_keys_len = leaf.keys.len();
+
+                // End the leaf borrow scope here
+
+                // Create the new right node - allocate directly in arena to reuse deallocated nodes
+                let new_right_id = self.allocate_leaf_with_data(
+                    leaf_capacity,
+                    right_keys,
+                    right_values,
+                    leaf_next, // Right node takes over the next pointer
+                );
+
+                // Update the linked list: get fresh mutable reference to original leaf
+                if let Some(leaf) = self.get_leaf_mut(leaf_id) {
+                    leaf.next = new_right_id;
                 }
 
-                // Determine the separator key (first key of right node)
-                let separator_key = new_right.first_key().unwrap().clone();
+                // Insert into the correct node
+                if index <= leaf_keys_len {
+                    // Insert into the original (left) leaf
+                    if let Some(leaf) = self.get_leaf_mut(leaf_id) {
+                        leaf.insert_at_index(index, key, value);
+                    }
+                } else {
+                    // Insert into the new (right) leaf
+                    if let Some(new_right) = self.get_leaf_mut(new_right_id) {
+                        new_right.insert_at_index(index - leaf_keys_len, key, value);
+                    }
+                }
 
+                // Get the separator key from the newly allocated node
+                let separator_key = self
+                    .get_leaf(new_right_id)
+                    .and_then(|node| node.first_key())
+                    .unwrap()
+                    .clone();
+
+                // Return the already-allocated node ID
                 InsertResult::Split {
                     old_value: None,
-                    new_node_data: SplitNodeData::Leaf(new_right),
+                    new_node_data: SplitNodeData::AllocatedLeaf(new_right_id),
                     separator_key,
                 }
             }
@@ -124,6 +169,14 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                             }
                             SplitNodeData::Branch(new_branch_data) => {
                                 let new_id = self.allocate_branch(new_branch_data);
+                                NodeRef::Branch(new_id, PhantomData)
+                            }
+                            SplitNodeData::AllocatedLeaf(new_id) => {
+                                // Node already allocated, just create NodeRef
+                                NodeRef::Leaf(new_id, PhantomData)
+                            }
+                            SplitNodeData::AllocatedBranch(new_id) => {
+                                // Node already allocated, just create NodeRef
                                 NodeRef::Branch(new_id, PhantomData)
                             }
                         };
@@ -212,6 +265,14 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     }
                     SplitNodeData::Branch(new_branch_data) => {
                         let new_id = self.allocate_branch(new_branch_data);
+                        NodeRef::Branch(new_id, PhantomData)
+                    }
+                    SplitNodeData::AllocatedLeaf(new_id) => {
+                        // Node already allocated, just create NodeRef
+                        NodeRef::Leaf(new_id, PhantomData)
+                    }
+                    SplitNodeData::AllocatedBranch(new_id) => {
+                        // Node already allocated, just create NodeRef
                         NodeRef::Branch(new_id, PhantomData)
                     }
                 };

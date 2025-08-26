@@ -190,7 +190,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
             // OPTIMIZATION: Batch sibling information gathering with direct node access
             let left_sibling_info = if child_index > 0 {
-                let sibling_ref = parent_branch.children[child_index - 1].clone();
+                let sibling_ref = parent_branch.children[child_index - 1];
                 let can_donate = match &sibling_ref {
                     NodeRef::Leaf(id, _) => self
                         .get_leaf(*id)
@@ -207,7 +207,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             };
 
             let right_sibling_info = if child_index < parent_branch.children.len() - 1 {
-                let sibling_ref = parent_branch.children[child_index + 1].clone();
+                let sibling_ref = parent_branch.children[child_index + 1];
                 let can_donate = match &sibling_ref {
                     NodeRef::Leaf(id, _) => self
                         .get_leaf(*id)

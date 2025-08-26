@@ -153,6 +153,9 @@ impl<K, V> NodeRef<K, V> {
 pub enum SplitNodeData<K, V> {
     Leaf(LeafNode<K, V>),
     Branch(BranchNode<K, V>),
+    /// Node already allocated in arena - contains the NodeId
+    AllocatedLeaf(NodeId),
+    AllocatedBranch(NodeId),
 }
 
 /// Result of an insertion operation on a node.
