@@ -1,5 +1,5 @@
 use bplustree::BPlusTreeMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 fn main() {
     println!("Detailed Delete Operation Profiler");
@@ -105,7 +105,7 @@ fn profile_tree_size(size: usize) {
     );
 
     // Analyze which pattern is most expensive
-    let times = vec![
+    let times = [
         ("Sequential (start)", sequential_time),
         ("Sequential (end)", reverse_time),
         ("Middle", middle_time),

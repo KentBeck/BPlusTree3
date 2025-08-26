@@ -88,19 +88,18 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     leaf_next, // Right node takes over the next pointer
                 );
 
-                // Update the linked list: get fresh mutable reference to original leaf
-                if let Some(leaf) = self.get_leaf_mut(leaf_id) {
-                    leaf.next = new_right_id;
-                }
-
-                // Insert into the correct node
+                // Update the linked list and insert into the correct node with single get_leaf_mut call
                 if index <= leaf_keys_len {
-                    // Insert into the original (left) leaf
+                    // Insert into the original (left) leaf - combine linked list update with insertion
                     if let Some(leaf) = self.get_leaf_mut(leaf_id) {
-                        leaf.insert_at_index(index, key, value);
+                        leaf.next = new_right_id; // Update linked list
+                        leaf.insert_at_index(index, key, value); // Insert key-value
                     }
                 } else {
-                    // Insert into the new (right) leaf
+                    // Update linked list in original leaf, then insert into the new (right) leaf
+                    if let Some(leaf) = self.get_leaf_mut(leaf_id) {
+                        leaf.next = new_right_id; // Update linked list
+                    }
                     if let Some(new_right) = self.get_leaf_mut(new_right_id) {
                         new_right.insert_at_index(index - leaf_keys_len, key, value);
                     }
