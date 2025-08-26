@@ -299,16 +299,6 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         }
     }
 
-    /// Split the keys vector at the given index.
-    pub fn split_keys_at(&mut self, at: usize) -> Vec<K> {
-        self.keys.split_off(at)
-    }
-
-    /// Split the values vector at the given index.
-    pub fn split_values_at(&mut self, at: usize) -> Vec<V> {
-        self.values.split_off(at)
-    }
-
     // ============================================================================
     // INSERT OPERATIONS
     // ============================================================================
