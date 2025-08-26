@@ -19,7 +19,6 @@ pub struct ItemIterator<'a, K, V> {
     end_key: Option<&'a K>,
     end_bound_key: Option<K>,
     end_inclusive: bool,
-    finished: bool,
 }
 
 /// Fast iterator over key-value pairs using unsafe arena access for better performance.
@@ -116,7 +115,6 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
             end_key: None,
             end_bound_key: None,
             end_inclusive: false,
-            finished: false,
         }
     }
 
@@ -142,7 +140,6 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
             end_key,
             end_bound_key,
             end_inclusive,
-            finished: false,
         }
     }
 
@@ -222,12 +219,6 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
         // Return whether we successfully got the next leaf
         self.current_leaf_ref.is_some()
     }
-
-    /// Legacy method for compatibility - delegates to streamlined version
-    #[inline]
-    fn advance_to_next_leaf(&mut self) -> Option<bool> {
-        Some(self.advance_to_next_leaf_direct())
-    }
 }
 
 impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
@@ -242,7 +233,7 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
         // 3. Simplified advance_to_next_leaf_direct() with bool return
         // 4. Single exit point pattern
 
-        'outer: loop {
+        loop {
             // Direct access - if no leaf, we're done (terminal state)
             let leaf = self.current_leaf_ref?;
 
