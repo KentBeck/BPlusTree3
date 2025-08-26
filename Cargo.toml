@@ -13,3 +13,6 @@ edition = "2021"
 rand = "0.8"
 criterion = { version = "0.5", features = ["html_reports"] }
 paste = "1.0"
+
+[profile.release]
+debug = true
