@@ -350,7 +350,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     }
 
     /// Insert a key-value pair at the specified index.
-    fn insert_at_index(&mut self, index: usize, key: K, value: V) {
+    pub fn insert_at_index(&mut self, index: usize, key: K, value: V) {
         self.keys.insert(index, key);
         self.values.insert(index, value);
     }

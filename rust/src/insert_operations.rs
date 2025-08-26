@@ -29,8 +29,53 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Insert into a leaf node by ID.
     fn insert_into_leaf(&mut self, leaf_id: NodeId, key: K, value: V) -> InsertResult<K, V> {
-        self.get_leaf_mut(leaf_id)
-            .map_or(InsertResult::Updated(None), |leaf| leaf.insert(key, value))
+        let leaf = match self.get_leaf_mut(leaf_id) {
+            Some(leaf) => leaf,
+            None => return InsertResult::Updated(None),
+        };
+
+        // Do binary search once and use the result throughout
+        match leaf.binary_search_keys(&key) {
+            Ok(index) => {
+                // Key already exists, update the value
+                if let Some(old_val) = leaf.get_value_mut(index) {
+                    let old_value = std::mem::replace(old_val, value);
+                    InsertResult::Updated(Some(old_value))
+                } else {
+                    InsertResult::Updated(None)
+                }
+            }
+            Err(index) => {
+                // Key doesn't exist, need to insert
+                // Check if split is needed BEFORE inserting
+                if !leaf.is_full() {
+                    // Room to insert without splitting
+                    leaf.insert_at_index(index, key, value);
+                    // Simple insertion - no split needed
+                    return InsertResult::Updated(None);
+                }
+
+                // Node is full, need to split
+                // Don't insert first. That causes the Vecs to overflow.
+                // Split the full node
+                let mut new_right = leaf.split();
+                // Insert into the correct node
+                if index <= leaf.keys.len() {
+                    leaf.insert_at_index(index, key, value);
+                } else {
+                    new_right.insert_at_index(index - leaf.keys.len(), key, value);
+                }
+
+                // Determine the separator key (first key of right node)
+                let separator_key = new_right.first_key().unwrap().clone();
+
+                InsertResult::Split {
+                    old_value: None,
+                    new_node_data: SplitNodeData::Leaf(new_right),
+                    separator_key,
+                }
+            }
+        }
     }
 
     /// Recursively insert a key with proper arena access.
