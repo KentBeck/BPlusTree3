@@ -21,7 +21,10 @@ fn main() {
         .unwrap_or(100_000);
 
     println!("=== Large Delete Benchmark ===");
-    println!("Size: {} elements, Capacity: {} keys/node", tree_size, capacity);
+    println!(
+        "Size: {} elements, Capacity: {} keys/node",
+        tree_size, capacity
+    );
     println!("Delete sample: {} keys (pseudo-random)", delete_sample);
 
     // Prepare delete keys (pseudo-random deterministic sequence across range [0, tree_size))
@@ -78,12 +81,21 @@ fn main() {
     let ratio = btree_per_op / bplus_per_op;
 
     println!("\nDelete times:");
-    println!("  BPlusTreeMap: {:?} total ({:.1} ns/op)", bplus_delete, bplus_per_op);
-    println!("  BTreeMap:     {:?} total ({:.1} ns/op)", btree_delete, btree_per_op);
+    println!(
+        "  BPlusTreeMap: {:?} total ({:.1} ns/op)",
+        bplus_delete, bplus_per_op
+    );
+    println!(
+        "  BTreeMap:     {:?} total ({:.1} ns/op)",
+        btree_delete, btree_per_op
+    );
     println!(
         "  Ratio:        {:.2}x {}",
         ratio,
-        if ratio > 1.0 { "(BPlusTreeMap faster)" } else { "(BTreeMap faster)" }
+        if ratio > 1.0 {
+            "(BPlusTreeMap faster)"
+        } else {
+            "(BTreeMap faster)"
+        }
     );
 }
-

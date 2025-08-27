@@ -59,6 +59,8 @@ fn main() {
         cycles += 1;
     }
 
-    eprintln!("completed cycles: {} (cap={}, size={})", cycles, capacity, tree_size);
+    eprintln!(
+        "completed cycles: {} (cap={}, size={})",
+        cycles, capacity, tree_size
+    );
 }
-

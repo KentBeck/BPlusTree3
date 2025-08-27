@@ -286,11 +286,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
 #[cfg(test)]
 mod tests {
-    // Test module for insert operations
+    use crate::BPlusTreeMap;
 
     #[test]
     fn test_insert_operations_module_exists() {
-        // Just a placeholder test to ensure the module compiles
-        assert!(true);
+        let mut tree = BPlusTreeMap::new(4).unwrap();
+        assert_eq!(tree.len(), 0);
+        assert_eq!(tree.insert(1, 10), None);
+        assert_eq!(tree.insert(1, 20), Some(10));
     }
 }

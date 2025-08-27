@@ -93,9 +93,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                             let _child_still_exists = self.rebalance_child(id, child_index);
                         }
 
-                        // Check if this branch is now underfull after rebalancing
-                        let is_underfull =
-                            self.is_node_underfull(&NodeRef::Branch(id, PhantomData));
+                        // Only compute underfull if a removal actually happened
+                        let is_underfull = if removed_value.is_some() {
+                            self.is_node_underfull(&NodeRef::Branch(id, PhantomData))
+                        } else {
+                            false
+                        };
                         RemoveResult::Updated(removed_value, is_underfull)
                     }
                 }
@@ -251,8 +254,12 @@ mod tests {
 
     #[test]
     fn test_delete_operations_module_exists() {
-        // Just a placeholder test to ensure the module compiles
-        assert!(true);
+        // Ensure a new tree is empty and basic insert/remove works
+        let mut tree = BPlusTreeMap::new(4).unwrap();
+        assert_eq!(tree.len(), 0);
+        tree.insert(1, "one".to_string());
+        assert_eq!(tree.remove(&1), Some("one".to_string()));
+        assert_eq!(tree.len(), 0);
     }
 
     #[test]
@@ -675,13 +682,16 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             None => return false,
         };
 
-        // Borrow from right leaf
-        let (key, value) = match self.get_leaf_mut(right_id) {
-            Some(right_leaf) => match right_leaf.borrow_first() {
-                Some(result) => result,
-                None => return false,
-            },
-            None => return false,
+        // Borrow from right leaf and capture the new first key for parent separator
+        let (key, value, new_first_opt) = if let Some(right_leaf) = self.get_leaf_mut(right_id) {
+            if let Some((key, value)) = right_leaf.borrow_first() {
+                let new_first = right_leaf.first_key().cloned();
+                (key, value, new_first)
+            } else {
+                return false;
+            }
+        } else {
+            return false;
         };
 
         // Accept into child leaf - use early return for cleaner flow
@@ -690,13 +700,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
         child_leaf.accept_from_right(key, value);
 
-        // Update separator in parent (new first key of right sibling, second parent access)
-        let new_separator = self
-            .get_leaf(right_id)
-            .and_then(|right_leaf| right_leaf.first_key().cloned());
-
-        // Use Option combinators for nested conditional update
-        if let Some((sep, branch)) = new_separator.zip(self.get_branch_mut(branch_id)) {
+        // Update separator in parent (new first key of right sibling captured above)
+        if let (Some(sep), Some(branch)) = (new_first_opt, self.get_branch_mut(branch_id)) {
             branch.keys[child_index] = sep;
         }
 
@@ -728,7 +733,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         // Merge into left leaf and update linked list - reserve to avoid reallocations
-        let Some(left_leaf) = self.get_leaf_mut(left_id) else { return false; };
+        let Some(left_leaf) = self.get_leaf_mut(left_id) else {
+            return false;
+        };
         left_leaf.append_keys(&mut child_keys);
         left_leaf.append_values(&mut child_values);
         left_leaf.next = child_next;
@@ -779,7 +786,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             };
 
             // Then merge into child, reserving capacity to avoid reallocations
-            let Some(child_leaf) = self.get_leaf_mut(child_id) else { return false; };
+            let Some(child_leaf) = self.get_leaf_mut(child_id) else {
+                return false;
+            };
             child_leaf.append_keys(&mut right_keys);
             child_leaf.append_values(&mut right_values);
             child_leaf.next = right_next;

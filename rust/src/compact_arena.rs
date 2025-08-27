@@ -314,70 +314,7 @@ impl<T: Default> CompactArena<T> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_compact_arena_basic_operations() {
-        let mut arena = CompactArena::new();
-
-        // Allocate some items
-        let id1 = arena.allocate(42);
-        let id2 = arena.allocate(84);
-        let id3 = arena.allocate(126);
-
-        // Test retrieval
-        assert_eq!(arena.get(id1), Some(&42));
-        assert_eq!(arena.get(id2), Some(&84));
-        assert_eq!(arena.get(id3), Some(&126));
-
-        // Test contains
-        assert!(arena.contains(id1));
-        assert!(arena.contains(id2));
-        assert!(arena.contains(id3));
-        assert!(!arena.contains(NULL_NODE));
-
-        // Test stats
-        let stats = arena.stats();
-        assert_eq!(stats.allocated_count, 3);
-        assert_eq!(stats.free_count, 0);
-    }
-
-    #[test]
-    fn test_compact_arena_with_default() {
-        let mut arena: CompactArena<i32> = CompactArena::new();
-
-        let id1 = arena.allocate(42);
-        let id2 = arena.allocate(84);
-
-        // Deallocate with default
-        let removed = arena.deallocate_with_default(id1);
-        assert_eq!(removed, Some(42));
-        assert!(!arena.contains(id1));
-        assert!(arena.contains(id2));
-
-        // Reuse the slot
-        let id3 = arena.allocate(168);
-        assert_eq!(arena.get(id3), Some(&168));
-
-        let stats = arena.stats();
-        assert_eq!(stats.allocated_count, 2);
-        assert_eq!(stats.free_count, 0); // Should be reused
-    }
-
-    #[test]
-    fn test_unsafe_access() {
-        let mut arena = CompactArena::new();
-        let id = arena.allocate(42);
-
-        unsafe {
-            assert_eq!(*arena.get_unchecked(id), 42);
-            *arena.get_unchecked_mut(id) = 84;
-            assert_eq!(*arena.get_unchecked(id), 84);
-        }
-    }
-}
+// tests moved to end of file to satisfy clippy (items_after_test_module)
 
 // ============================================================================
 // BPLUSTREE ARENA ALLOCATION HELPERS
@@ -505,5 +442,64 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Caller must ensure id is valid and allocated
     pub unsafe fn get_branch_unchecked(&self, id: NodeId) -> &BranchNode<K, V> {
         self.branch_arena.get_unchecked(id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compact_arena_basic_operations() {
+        let mut arena = CompactArena::new();
+
+        let id1 = arena.allocate(42);
+        let id2 = arena.allocate(84);
+        let id3 = arena.allocate(126);
+
+        assert_eq!(arena.get(id1), Some(&42));
+        assert_eq!(arena.get(id2), Some(&84));
+        assert_eq!(arena.get(id3), Some(&126));
+
+        assert!(arena.contains(id1));
+        assert!(arena.contains(id2));
+        assert!(arena.contains(id3));
+        assert!(!arena.contains(NULL_NODE));
+
+        let stats = arena.stats();
+        assert_eq!(stats.allocated_count, 3);
+        assert_eq!(stats.free_count, 0);
+    }
+
+    #[test]
+    fn test_compact_arena_with_default() {
+        let mut arena: CompactArena<i32> = CompactArena::new();
+
+        let id1 = arena.allocate(42);
+        let id2 = arena.allocate(84);
+
+        let removed = arena.deallocate_with_default(id1);
+        assert_eq!(removed, Some(42));
+        assert!(!arena.contains(id1));
+        assert!(arena.contains(id2));
+
+        let id3 = arena.allocate(168);
+        assert_eq!(arena.get(id3), Some(&168));
+
+        let stats = arena.stats();
+        assert_eq!(stats.allocated_count, 2);
+        assert_eq!(stats.free_count, 0);
+    }
+
+    #[test]
+    fn test_unsafe_access() {
+        let mut arena = CompactArena::new();
+        let id = arena.allocate(42);
+
+        unsafe {
+            assert_eq!(*arena.get_unchecked(id), 42);
+            *arena.get_unchecked_mut(id) = 84;
+            assert_eq!(*arena.get_unchecked(id), 84);
+        }
     }
 }
