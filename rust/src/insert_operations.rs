@@ -90,18 +90,15 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 // Update the linked list first
                 if let Some(leaf) = self.get_leaf_mut(leaf_id) {
                     leaf.next = new_right_id;
-                }
-
-                // Then insert into the correct node
-                if index <= leaf_keys_len {
-                    // Insert into the original (left) leaf
-                    if let Some(leaf) = self.get_leaf_mut(leaf_id) {
+                    // Then insert into the correct node
+                    if index <= leaf_keys_len {
+                        // Insert into the original (left) leaf
                         leaf.insert_at_index(index, key, value);
-                    }
-                } else {
-                    // Insert into the new (right) leaf
-                    if let Some(new_right) = self.get_leaf_mut(new_right_id) {
-                        new_right.insert_at_index(index - leaf_keys_len, key, value);
+                    } else {
+                        // Insert into the new (right) leaf
+                        if let Some(new_right) = self.get_leaf_mut(new_right_id) {
+                            new_right.insert_at_index(index - leaf_keys_len, key, value);
+                        }
                     }
                 }
 
