@@ -17,3 +17,7 @@
   - `cd rust && cargo run --release --bin large_delete_benchmark`
   - Optional: record Instruments trace for confirmation of hotspot reductions.
 
+- Hygiene before commit
+  - Always remove dead code introduced by refactors.
+  - Always format the workspace: `cd rust && cargo fmt --all`.
+  - Always run all tests: `cargo test --workspace` (and benches if relevant).
