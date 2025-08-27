@@ -462,9 +462,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             let Some(left_branch) = self.get_branch_mut(left_id) else {
                 return false;
             };
-            let add_keys = 1 + child_keys.len(); // separator + child keys
-            let add_children = child_children.len();
-            left_branch.reserve_for_merge(add_keys, add_children);
             left_branch.keys.push(separator_key);
             left_branch.keys.append(&mut child_keys);
             left_branch.children.append(&mut child_children);
@@ -518,9 +515,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             let Some(child_branch) = self.get_branch_mut(child_id) else {
                 return false;
             };
-            let add_keys = 1 + right_keys.len(); // separator + right keys
-            let add_children = right_children.len();
-            child_branch.reserve_for_merge(add_keys, add_children);
             child_branch.keys.push(separator_key);
             child_branch.keys.append(&mut right_keys);
             child_branch.children.append(&mut right_children);
@@ -735,8 +729,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
         // Merge into left leaf and update linked list - reserve to avoid reallocations
         let Some(left_leaf) = self.get_leaf_mut(left_id) else { return false; };
-        let add = child_keys.len();
-        left_leaf.reserve_for_merge(add);
         left_leaf.append_keys(&mut child_keys);
         left_leaf.append_values(&mut child_values);
         left_leaf.next = child_next;
@@ -788,8 +780,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
             // Then merge into child, reserving capacity to avoid reallocations
             let Some(child_leaf) = self.get_leaf_mut(child_id) else { return false; };
-            let add = right_keys.len();
-            child_leaf.reserve_for_merge(add);
             child_leaf.append_keys(&mut right_keys);
             child_leaf.append_values(&mut right_values);
             child_leaf.next = right_next;

@@ -122,10 +122,11 @@ impl<K, V> LeafNode<K, V> {
     /// // Leaf node created successfully
     /// ```
     pub fn new(capacity: usize) -> Self {
+        // Pre-allocate to capacity to avoid reallocations during steady-state ops
         Self {
             capacity,
-            keys: Vec::new(),
-            values: Vec::new(),
+            keys: Vec::with_capacity(capacity),
+            values: Vec::with_capacity(capacity),
             next: NULL_NODE,
         }
     }
@@ -187,10 +188,11 @@ impl<K, V> BranchNode<K, V> {
     /// // Branch node created successfully
     /// ```
     pub fn new(capacity: usize) -> Self {
+        // Pre-allocate: keys up to capacity, children up to capacity+1
         Self {
             capacity,
-            keys: Vec::new(),
-            children: Vec::new(),
+            keys: Vec::with_capacity(capacity),
+            children: Vec::with_capacity(capacity + 1),
         }
     }
 

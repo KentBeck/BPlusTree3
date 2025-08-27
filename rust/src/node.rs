@@ -226,13 +226,6 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         self.values.append(other);
     }
 
-    /// Reserve capacity for an incoming merge of `additional` items.
-    #[inline]
-    pub fn reserve_for_merge(&mut self, additional: usize) {
-        // Reserve for both keys and values (kept in lockstep)
-        self.keys.reserve(additional);
-        self.values.reserve(additional);
-    }
 
     /// Take all keys, leaving an empty vector.
     #[inline]
@@ -723,10 +716,4 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         self.children.append(&mut other.children);
     }
 
-    /// Reserve capacity for an incoming merge.
-    #[inline]
-    pub fn reserve_for_merge(&mut self, additional_keys: usize, additional_children: usize) {
-        self.keys.reserve(additional_keys);
-        self.children.reserve(additional_children);
-    }
 }
