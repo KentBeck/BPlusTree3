@@ -57,7 +57,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
                 // Node is full, need to split
                 // Don't insert first. That causes the Vecs to overflow.
-                // Split the full node - inline the split logic
 
                 // Calculate split point for better balance while ensuring both sides have at least min_keys
                 let min_keys = leaf.capacity / 2; // min_keys() inlined
@@ -88,18 +87,19 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     leaf_next, // Right node takes over the next pointer
                 );
 
-                // Update the linked list and insert into the correct node with single get_leaf_mut call
+                // Update the linked list first
+                if let Some(leaf) = self.get_leaf_mut(leaf_id) {
+                    leaf.next = new_right_id;
+                }
+
+                // Then insert into the correct node
                 if index <= leaf_keys_len {
-                    // Insert into the original (left) leaf - combine linked list update with insertion
+                    // Insert into the original (left) leaf
                     if let Some(leaf) = self.get_leaf_mut(leaf_id) {
-                        leaf.next = new_right_id; // Update linked list
-                        leaf.insert_at_index(index, key, value); // Insert key-value
+                        leaf.insert_at_index(index, key, value);
                     }
                 } else {
-                    // Update linked list in original leaf, then insert into the new (right) leaf
-                    if let Some(leaf) = self.get_leaf_mut(leaf_id) {
-                        leaf.next = new_right_id; // Update linked list
-                    }
+                    // Insert into the new (right) leaf
                     if let Some(new_right) = self.get_leaf_mut(new_right_id) {
                         new_right.insert_at_index(index - leaf_keys_len, key, value);
                     }
