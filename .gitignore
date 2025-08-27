@@ -47,3 +47,8 @@ python/wheelhouse/
 plot_commits_vs_duration.py
 commits_vs_duration_analysis.png
 rust/test_simple.rs
+# Profiling artifacts (do not commit)
+rust/delete_profile.trace/
+rust/delete_time_profile.xml
+rust/delete_time_sample.xml
+*.trace
