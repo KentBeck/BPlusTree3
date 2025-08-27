@@ -226,6 +226,14 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         self.values.append(other);
     }
 
+    /// Reserve capacity for an incoming merge of `additional` items.
+    #[inline]
+    pub fn reserve_for_merge(&mut self, additional: usize) {
+        // Reserve for both keys and values (kept in lockstep)
+        self.keys.reserve(additional);
+        self.values.reserve(additional);
+    }
+
     /// Take all keys, leaving an empty vector.
     #[inline]
     pub fn take_keys(&mut self) -> Vec<K> {
@@ -474,6 +482,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         Some((self.keys.remove(0), self.values.remove(0)))
     }
 
+
     /// Accept a borrowed key-value pair at the beginning (from left sibling)
     pub fn accept_from_left(&mut self, key: K, value: V) {
         self.keys.insert(0, key);
@@ -712,5 +721,12 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         // Add all keys and children from other
         self.keys.append(&mut other.keys);
         self.children.append(&mut other.children);
+    }
+
+    /// Reserve capacity for an incoming merge.
+    #[inline]
+    pub fn reserve_for_merge(&mut self, additional_keys: usize, additional_children: usize) {
+        self.keys.reserve(additional_keys);
+        self.children.reserve(additional_children);
     }
 }
