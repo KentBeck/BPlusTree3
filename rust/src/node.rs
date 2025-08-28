@@ -488,6 +488,8 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
 
     /// Merge all content from another leaf into this one, returning the other's next pointer
     pub fn merge_from(&mut self, other: &mut LeafNode<K, V>) -> NodeId {
+        debug_assert!(self.keys.len() + other.keys.len() <= self.capacity);
+        debug_assert!(self.values.len() + other.values.len() <= self.capacity);
         self.keys.append(&mut other.keys);
         self.values.append(&mut other.values);
         let other_next = other.next;
@@ -708,6 +710,8 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     /// Merge all content from another branch into this one, with separator from parent
     pub fn merge_from(&mut self, separator: K, other: &mut BranchNode<K, V>) {
         // Add separator key from parent
+        debug_assert!(self.keys.len() + 1 + other.keys.len() <= self.capacity);
+        debug_assert!(self.children.len() + other.children.len() <= self.capacity + 1);
         self.keys.push(separator);
         // Add all keys and children from other
         self.keys.append(&mut other.keys);

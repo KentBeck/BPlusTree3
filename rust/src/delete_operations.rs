@@ -580,10 +580,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 None => return false,
             };
 
-            // Then merge into left, reserving capacity to avoid reallocations
+            // Then merge into left (no extra reserving; capacity invariants hold)
             let Some(left_branch) = self.get_branch_mut(left_id) else {
                 return false;
             };
+            debug_assert!(left_branch.keys.len() + 1 + child_keys.len() <= left_branch.capacity);
+            debug_assert!(left_branch.children.len() + child_children.len() <= left_branch.capacity + 1);
             left_branch.keys.push(separator_key);
             left_branch.keys.append(&mut child_keys);
             left_branch.children.append(&mut child_children);
@@ -633,10 +635,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 None => return false,
             };
 
-            // Then merge into child, reserving capacity to avoid reallocations
+            // Then merge into child (no extra reserving; capacity invariants hold)
             let Some(child_branch) = self.get_branch_mut(child_id) else {
                 return false;
             };
+            debug_assert!(child_branch.keys.len() + 1 + right_keys.len() <= child_branch.capacity);
+            debug_assert!(child_branch.children.len() + right_children.len() <= child_branch.capacity + 1);
             child_branch.keys.push(separator_key);
             child_branch.keys.append(&mut right_keys);
             child_branch.children.append(&mut right_children);
@@ -781,6 +785,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         let Some(left_leaf) = self.get_leaf_mut(left_id) else {
             return false;
         };
+        debug_assert!(left_leaf.keys.len() + child_keys.len() <= left_leaf.capacity);
+        debug_assert!(left_leaf.values.len() + child_values.len() <= left_leaf.capacity);
         left_leaf.append_keys(&mut child_keys);
         left_leaf.append_values(&mut child_values);
         left_leaf.next = child_next;
@@ -813,6 +819,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             let Some(child_leaf) = self.get_leaf_mut(child_id) else {
                 return false;
             };
+            debug_assert!(child_leaf.keys.len() + right_keys.len() <= child_leaf.capacity);
+            debug_assert!(child_leaf.values.len() + right_values.len() <= child_leaf.capacity);
             child_leaf.append_keys(&mut right_keys);
             child_leaf.append_values(&mut right_values);
             child_leaf.next = right_next;
