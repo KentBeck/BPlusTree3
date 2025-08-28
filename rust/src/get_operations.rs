@@ -32,16 +32,11 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// assert_eq!(tree.get(&2), None);
     /// ```
     pub fn get(&self, key: &K) -> Option<&V> {
-        let (leaf_id, index) = self.find_leaf_for_key(key)?;
-        let leaf = self.get_leaf(leaf_id)?;
-        if index < leaf.keys_len() {
-            if let Some(k) = leaf.get_key(index) {
-                if k == key {
-                    return leaf.get_value(index);
-                }
-            }
+        let (leaf_id, index, matched) = self.find_leaf_for_key_with_match(key)?;
+        if !matched {
+            return None;
         }
-        None
+        self.get_leaf(leaf_id)?.get_value(index)
     }
 
     /// Check if key exists in the tree.
@@ -141,16 +136,11 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// assert_eq!(tree.get(&1), Some(&"ONE"));
     /// ```
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        let (leaf_id, index) = self.find_leaf_for_key(key)?;
-        let leaf = self.get_leaf_mut(leaf_id)?;
-        if index < leaf.keys_len() {
-            if let Some(k) = leaf.get_key(index) {
-                if k == key {
-                    return leaf.get_value_mut(index);
-                }
-            }
+        let (leaf_id, index, matched) = self.find_leaf_for_key_with_match(key)?;
+        if !matched {
+            return None;
         }
-        None
+        self.get_leaf_mut(leaf_id)?.get_value_mut(index)
     }
 
     /// Try to get a value, returning detailed error context on failure.

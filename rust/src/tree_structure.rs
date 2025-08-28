@@ -174,6 +174,40 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
+    /// Find the target leaf and provide both the index and whether the key matched exactly.
+    /// Returns `(leaf_id, index, matched)` where `matched` is true if the key exists at `index`.
+    #[inline]
+    pub(crate) fn find_leaf_for_key_with_match(&self, key: &K) -> Option<(NodeId, usize, bool)> {
+        let mut current = &self.root;
+
+        loop {
+            match current {
+                NodeRef::Leaf(leaf_id, _) => {
+                    if let Some(leaf) = self.get_leaf(*leaf_id) {
+                        match leaf.binary_search_keys(key) {
+                            Ok(idx) => return Some((*leaf_id, idx, true)),
+                            Err(idx) => return Some((*leaf_id, idx, false)),
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+                NodeRef::Branch(branch_id, _) => {
+                    if let Some(branch) = self.get_branch(*branch_id) {
+                        let child_index = branch.find_child_index(key);
+                        if let Some(child) = branch.children.get(child_index) {
+                            current = child;
+                        } else {
+                            return None;
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+            }
+        }
+    }
+
     // Arena statistics and management methods moved to arena.rs module
 
     // ============================================================================
