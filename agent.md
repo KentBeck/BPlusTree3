@@ -19,5 +19,6 @@
 
 - Hygiene before commit
   - Always remove dead code introduced by refactors.
+  - Delete code as soon as it is dead.
   - Always format the workspace: `cd rust && cargo fmt --all`.
   - Always run all tests: `cargo test --workspace` (and benches if relevant).
