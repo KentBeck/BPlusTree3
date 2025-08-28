@@ -4,7 +4,7 @@
 //! bounds resolution, and range optimization algorithms.
 
 use crate::iteration::RangeIterator;
-use crate::types::{BPlusTreeMap, NodeId, NodeRef};
+use crate::types::{BPlusTreeMap, NodeId};
 use std::ops::{Bound, RangeBounds};
 
 /// Type alias for complex range analysis result
@@ -75,8 +75,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     {
         // Optimize start bound resolution - eliminate redundant Option handling
         let (start_info, skip_first) = match range.start_bound() {
-            Bound::Included(key) => (self.find_range_start(key), false),
-            Bound::Excluded(key) => (self.find_range_start(key), true),
+            Bound::Included(key) => (self.find_leaf_for_key(key), false),
+            Bound::Excluded(key) => (self.find_leaf_for_key(key), true),
             Bound::Unbounded => (self.get_first_leaf_id().map(|id| (id, 0)), false),
         };
 
@@ -88,45 +88,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         (start_info, skip_first, end_info)
-    }
-
-    /// Find the starting position for a range query.
-    fn find_range_start(&self, key: &K) -> Option<(NodeId, usize)> {
-        self.find_leaf_for_key(key)
-    }
-
-    /// Find the leaf node and index where a key should be located.
-    fn find_leaf_for_key(&self, key: &K) -> Option<(NodeId, usize)> {
-        let mut current = &self.root;
-
-        loop {
-            match current {
-                NodeRef::Leaf(leaf_id, _) => {
-                    if let Some(leaf) = self.get_leaf(*leaf_id) {
-                        // Find the position where this key would be inserted
-                        let index = match leaf.binary_search_keys(key) {
-                            Ok(idx) => idx,  // Key found at exact position
-                            Err(idx) => idx, // Key would be inserted at this position
-                        };
-                        return Some((*leaf_id, index));
-                    } else {
-                        return None;
-                    }
-                }
-                NodeRef::Branch(branch_id, _) => {
-                    if let Some(branch) = self.get_branch(*branch_id) {
-                        let child_index = branch.find_child_index(key);
-                        if let Some(child) = branch.children.get(child_index) {
-                            current = child;
-                        } else {
-                            return None;
-                        }
-                    } else {
-                        return None;
-                    }
-                }
-            }
-        }
     }
 
     // ============================================================================

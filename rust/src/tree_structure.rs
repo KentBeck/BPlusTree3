@@ -138,6 +138,42 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
+    /// Find the leaf node and index where a key should be located.
+    /// Returns the leaf `NodeId` and the insertion index within that leaf.
+    #[inline]
+    pub(crate) fn find_leaf_for_key(&self, key: &K) -> Option<(NodeId, usize)> {
+        let mut current = &self.root;
+
+        loop {
+            match current {
+                NodeRef::Leaf(leaf_id, _) => {
+                    if let Some(leaf) = self.get_leaf(*leaf_id) {
+                        // Find the position where this key would be inserted
+                        let index = match leaf.binary_search_keys(key) {
+                            Ok(idx) => idx,  // Key found at exact position
+                            Err(idx) => idx, // Key would be inserted at this position
+                        };
+                        return Some((*leaf_id, index));
+                    } else {
+                        return None;
+                    }
+                }
+                NodeRef::Branch(branch_id, _) => {
+                    if let Some(branch) = self.get_branch(*branch_id) {
+                        let child_index = branch.find_child_index(key);
+                        if let Some(child) = branch.children.get(child_index) {
+                            current = child;
+                        } else {
+                            return None;
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+            }
+        }
+    }
+
     // Arena statistics and management methods moved to arena.rs module
 
     // ============================================================================

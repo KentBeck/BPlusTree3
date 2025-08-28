@@ -32,8 +32,16 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// assert_eq!(tree.get(&2), None);
     /// ```
     pub fn get(&self, key: &K) -> Option<&V> {
-        let node = &self.root;
-        self.get_recursive(node, key)
+        let (leaf_id, index) = self.find_leaf_for_key(key)?;
+        let leaf = self.get_leaf(leaf_id)?;
+        if index < leaf.keys_len() {
+            if let Some(k) = leaf.get_key(index) {
+                if k == key {
+                    return leaf.get_value(index);
+                }
+            }
+        }
+        None
     }
 
     /// Check if key exists in the tree.
@@ -133,8 +141,16 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// assert_eq!(tree.get(&1), Some(&"ONE"));
     /// ```
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        let root = self.root;
-        self.get_mut_recursive(&root, key)
+        let (leaf_id, index) = self.find_leaf_for_key(key)?;
+        let leaf = self.get_leaf_mut(leaf_id)?;
+        if index < leaf.keys_len() {
+            if let Some(k) = leaf.get_key(index) {
+                if k == key {
+                    return leaf.get_value_mut(index);
+                }
+            }
+        }
+        None
     }
 
     /// Try to get a value, returning detailed error context on failure.
@@ -204,28 +220,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // PRIVATE HELPER METHODS FOR GET OPERATIONS
     // ============================================================================
 
-    /// Recursively search for a key in the tree.
-    #[inline]
-    fn get_recursive<'a>(&'a self, node: &'a NodeRef<K, V>, key: &K) -> Option<&'a V> {
-        match node {
-            NodeRef::Leaf(id, _) => self.get_leaf(*id).and_then(|leaf| leaf.get(key)),
-            NodeRef::Branch(id, _) => self
-                .get_branch(*id)
-                .and_then(|branch| branch.get_child(key))
-                .and_then(|child| self.get_recursive(child, key)),
-        }
-    }
-
-    /// Get mutable reference recursively.
-    fn get_mut_recursive(&mut self, node: &NodeRef<K, V>, key: &K) -> Option<&mut V> {
-        match node {
-            NodeRef::Leaf(id, _) => self.get_leaf_mut(*id).and_then(|leaf| leaf.get_mut(key)),
-            NodeRef::Branch(id, _) => {
-                let (_child_index, child_ref) = self.get_child_for_key(*id, key)?;
-                self.get_mut_recursive(&child_ref, key)
-            }
-        }
-    }
+    // Removed old recursive get helpers in favor of direct leaf-position lookup
 
     /// Helper to get child info for a key in a branch.
     #[inline]
