@@ -13,9 +13,10 @@ This project provides **complete, optimized B+ tree implementations** in both la
 
 ### **Rust Implementation**
 
-- **Up to 41% faster deletions** with optimized rebalancing
-- **19-30% improvement** in mixed workloads
-- **Full Rust range syntax support** (`3..7`, `3..=7`, `5..`, etc.)
+- **32-68% faster range scans** than std::BTreeMap (1.5-2.8x throughput)
+- **23-68% faster GET operations** across all dataset sizes
+- **2-22% faster insertions** with excellent scaling
+- **Trade-off: 34% slower deletes** in optimized scenarios
 
 ### **Python Implementation**
 
@@ -71,23 +72,15 @@ for key, value in tree.range(1, 2):
 - **🦀 [Rust Documentation](./rust/README.md)** - Rust-specific usage and examples
 - **🐍 [Python Documentation](./python/README.md)** - Python-specific usage and examples
 
-## ⚡ **Performance Analysis**
+## Performance Characteristics
 
-Comprehensive benchmarking shows **significant advantages** in specific scenarios:
+**BPlusTreeMap demonstrates significant performance advantages in range operations and read-heavy workloads compared to Rust's standard BTreeMap.** Comprehensive benchmarking across dataset sizes from 1K to 10M entries reveals that BPlusTreeMap consistently outperforms BTreeMap in range scans by 32-68%, delivering 1.5-2.8x higher throughput (67K-212K vs 44K-83K items/ms). GET operations show similarly strong advantages, with BPlusTreeMap performing 23-68% faster across all scales, making it particularly well-suited for read-heavy applications and analytical workloads.
 
-### **Key Strengths**
+**Insert performance is competitive to superior, with BPlusTreeMap showing 2-22% faster insertion speeds depending on dataset size and configuration.** The implementation scales exceptionally well, with larger datasets (>1M entries) showing the most pronounced advantages. However, delete operations represent the primary trade-off, with BPlusTreeMap performing 34% slower in optimized scenarios and 1.7-10.5x slower depending on capacity configuration, particularly at high capacities (1024+ elements per node).
 
-- **Range queries**: O(log n + k) complexity with excellent cache locality
-- **Sequential scans**: Linked leaf nodes enable efficient iteration
-- **Deletion-heavy workloads**: Optimized rebalancing algorithms
-- **Large datasets**: Performance improves with scale
+**Capacity configuration is critical for optimal performance.** The B+ tree implementation allows tuning of node capacity, with optimal settings varying by use case: capacity 64-128 for datasets under 10K entries, 128-256 for medium datasets (10K-100K), and 256-512 for large datasets (100K-1M+). Proper configuration can achieve near-optimal performance across all operations, while misconfiguration (particularly high capacities with delete-heavy workloads) can significantly impact performance.
 
-### **Benchmark Results**
-
-- **Rust**: 19-41% faster deletions, excellent overall performance
-- **Python**: 2.5x faster partial scans, competitive with highly optimized libraries
-
-See [performance documentation](./rust/docs/) for detailed analysis and charts.
+**BPlusTreeMap is recommended for range-heavy workloads (>20% range scans), read-heavy applications (>60% gets), large dataset analytics, and mixed workloads with light-to-moderate delete operations (<15% deletes).** Standard BTreeMap remains preferable for delete-heavy workloads, small datasets with unknown access patterns, or applications requiring zero configuration. The performance characteristics make BPlusTreeMap particularly valuable for database-like applications, time-series analysis, and any scenario where range queries and sequential access patterns dominate.
 
 ## 🏗️ **Architecture**
 
