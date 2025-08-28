@@ -585,7 +585,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 return false;
             };
             debug_assert!(left_branch.keys.len() + 1 + child_keys.len() <= left_branch.capacity);
-            debug_assert!(left_branch.children.len() + child_children.len() <= left_branch.capacity + 1);
+            debug_assert!(
+                left_branch.children.len() + child_children.len() <= left_branch.capacity + 1
+            );
             left_branch.keys.push(separator_key);
             left_branch.keys.append(&mut child_keys);
             left_branch.children.append(&mut child_children);
@@ -640,7 +642,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 return false;
             };
             debug_assert!(child_branch.keys.len() + 1 + right_keys.len() <= child_branch.capacity);
-            debug_assert!(child_branch.children.len() + right_children.len() <= child_branch.capacity + 1);
+            debug_assert!(
+                child_branch.children.len() + right_children.len() <= child_branch.capacity + 1
+            );
             child_branch.keys.push(separator_key);
             child_branch.keys.append(&mut right_keys);
             child_branch.children.append(&mut right_children);
